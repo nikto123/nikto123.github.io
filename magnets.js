@@ -70,12 +70,12 @@ class Magnet
     {
         var diff = other.angle - this.angle;
         this.aVel += diff / ( 2.0 * Math.PI);
-        this.aVel *= 0.984;
+        this.aVel *= 0.98;
     }
 
     applyForce()
     {
-        this.angle +=Math.sin(this.aVel)/4.0;
+        this.angle +=Math.sin(this.aVel)/2.0;
         while (this.angle > 2.0*Math.PI)
         {
             this.angle -= 2.0* Math.PI;
@@ -262,7 +262,7 @@ function onWheel(event)
         scale.x /= MULT;
         scale.y /= MULT;
     }
-    draw();
+    //draw();
 }
 
 NUM_POINTS = width;
