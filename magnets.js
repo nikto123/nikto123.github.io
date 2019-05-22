@@ -1,7 +1,9 @@
 var c = document.getElementById("c");
 c.addEventListener("wheel", onWheel);
 c.addEventListener("mouseup", onMouseUp);
-c.addEventListener("mouse", onMouseMove);
+c.addEventListener("mousedown", onMouseDown);
+
+c.addEventListener("mousemove", onMouseMove);
 
 c.width= window.innerWidth;
 c.height=window.innerHeight;
@@ -9,7 +11,7 @@ c.height=window.innerHeight;
 
 var width = c.width;
 var height = c.height;
-var lineWidth = 4.0;
+var lineWidth =3.0;
 var lineLength = 20.0;
 
 var SX = Math.round(width / lineLength);
@@ -17,6 +19,7 @@ var SY = Math.round(height / lineLength);
 
 var ctx = c.getContext("2d");
 
+var mDown = false;
 
 
 class Point
@@ -27,7 +30,7 @@ class Point
         this.y = y;
     }
 }
-
+var m = new Point(0,0);
 var scale = new Point(1.0, 1.0);
 var d = new Point(0,0);
 
@@ -66,13 +69,13 @@ class Magnet
     addForce(other)
     {
         var diff = other.angle - this.angle;
-        this.aVel += diff / (16.0 * 2.0 * Math.PI);
-        this.aVel *= 0.98;
+        this.aVel += diff / ( 2.0 * Math.PI);
+        this.aVel *= 0.984;
     }
 
     applyForce()
     {
-        this.angle += Math.sin(this.aVel)/8.0;
+        this.angle +=Math.sin(this.aVel)/4.0;
         while (this.angle > 2.0*Math.PI)
         {
             this.angle -= 2.0* Math.PI;
@@ -85,8 +88,9 @@ class Magnet
     update()
     {
         for (var x = -1; x < 2; x++)
-            for (var y = 1; y < 2; y++)
+            for (var y = -1; y < 2; y++)
             {
+                if (!x && !y) continue;
                 var f = new Point(x+this.pos.x, y+this.pos.y);
                 f = crop(f, SX, SY);              
                 this.addForce(field[f.x][f.y]);
@@ -139,11 +143,17 @@ function updateAndDraw()
             field[i][j].draw();   
         }
     }
+    if (mDown)
+    {
+        onMouseDrag();
+    }
 
 }
 function onMouseMove(event)
-{
- //   var m = new Point(event.clientX, event.clientY);
+{   
+
+
+    m = new Point(event.clientX, event.clientY);
     
 //    applyForces(m);
 }
@@ -154,7 +164,13 @@ function drawLine(from, to, width)
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
+    ctx.strokeStyle="#000000"
     ctx.stroke();
+
+   
+   // ctx.beginPath(); ctx.fillStyle ="#FF0000";
+   // ctx.fillRect(to.x,to.y, 2,2);
+  //  ctx.stroke();
 }
 
 
@@ -186,8 +202,9 @@ function drawText(text, x,y,lineNum)
 }
 function onMouseUp(event)
 {
+    mDown = false;
  
-    var m = new Point(event.clientX, event.clientY);
+    m = new Point(event.clientX, event.clientY);
     var mp = new Point((event.clientX), (event.clientY));
     
     worldPt = getWorldPoint(mp.x, mp.y, scale.x, scale.y, d.x, d.y); 
@@ -205,6 +222,28 @@ function onMouseUp(event)
     drawText("screen:"+sp.x+" "+sp.y, m.x,m.y,4);
 
 
+}
+
+function onMouseDrag()
+{
+     var i = new Point(Math.round(m.x / lineLength), 
+                       Math.round(m.y / lineLength));
+     for (x = -3; x < 4; x++)
+        for (y = -3; y < 4; y++)
+        {
+            var f = new Point(i.x + x, i.y + y);
+            f = crop(f, SX, SY);
+            var d = new Point(m.x/lineLength - f.x,
+                              m.y/lineLength - f.y);
+            field[f.x][f.y].angle = Math.atan2(d.y, d.x) + Math.PI;
+        }    
+}
+
+function onMouseDown(event)
+{
+    mDown = true;
+    m = new Point(event.clientX, event.clientY);
+    onMouseDrag();
 }
 
 function onWheel(event)
