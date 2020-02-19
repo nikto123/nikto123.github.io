@@ -166,8 +166,9 @@ class DrawServer
     constructor()
     {
         //init websocket? 
-        this.webSocket = new WebSocket("ws://localhost:8765");
+       // this.webSocket = new WebSocket("ws://localhost:8765");
       
+       /*
         this.webSocket.onmessage = function(event) {
             var msg = JSON.parse(event.data);
 
@@ -178,6 +179,7 @@ class DrawServer
           
             }
         }
+        */
     }
 
     draw(frame)
