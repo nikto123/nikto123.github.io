@@ -8,6 +8,7 @@ c.width= window.innerWidth;
 c.height=window.innerHeight;
 
 
+
 var w = c.width;
 var h = c.height;
 var lineWidth = 16.0;
@@ -238,6 +239,14 @@ class Rect
             drawLine(points[i], points[next]);
         }
     }
+
+    inside(pos)
+    {
+        if (pos.x > this.ul.x && pos.x < this.dr.x)
+        {
+            if (pos.x < this.dr.x && pos.y )
+        }
+    }
 }
 
 class Wave 
@@ -309,8 +318,8 @@ class Wave
             var lineWidth = (this.rect.dr.x - this.rect.ul.x) / this.resolution;
             for (var i = 0; i < this.values.length; i++)
             {
-                var a = new Point(this.pos.x + i * this.scalex, this.pos.y);
-                var b = new Point(this.pos.x + i * this.scalex, this.pos.y - this.values[i] * this.scaley);
+                var a = new Point(this.pos.x + i * this.scalex+lineWidth/2.0, this.pos.y);
+                var b = new Point(this.pos.x + i * this.scalex+lineWidth/2.0, this.pos.y - this.values[i] * this.scaley);
                 drawLine(a,b, lineWidth);           
             }
         }
@@ -350,14 +359,31 @@ class Wave
             {
                 sinwaves.values[freq] += this.values[x] * Math.sin(freq*x*this.xfactor);
                 coswaves.values[freq] += this.values[x] * Math.cos(freq*x*this.xfactor);
-              
-           
             }  
             sinwaves.values[freq] /= this.values.length;
-            coswaves.values[freq] /= this.values.length;
-          
-                
+            coswaves.values[freq] /= this.values.length;    
         }
+    }
+
+    inverseTransform(sinwaves, coswaves)
+    {
+        for (var freq = 0; freq < this.values.length; freq++)
+        {
+            this.values[freq] = 0;
+            for (var x = 0; x < this.values.length; x++)
+            {
+                var phase=-freq*x*this.xfactor;
+                this.values[freq] += (Math.cos(phase) * coswaves.values[x] - Math.sin(phase) * sinwaves.values[x]);
+             
+            }
+        }
+
+    }
+
+    handleMouse(mouse)
+    {
+
+
     }
 }
 
@@ -366,7 +392,6 @@ class WaveSim
 {
     constructor()
     {
-
         var width = w/2.0;
         var height = 200;
         var top = 1.0;
@@ -382,20 +407,20 @@ class WaveSim
 
         this.sinwaves.setDrawMode(1);
         this.coswaves.setDrawMode(1);
+
+        this.inverse= new Wave(wave.resolution, wave.pos.x, wave.pos.y+height * 3.25, width, height, top, floor, wave.left, wave.right);
+    
+        this.waves = [this.sinwaves, this.coswaves, this.wave, this.inverse];
     }
 
     transform()
     {
         this.wave.getTransform(this.sinwaves, this.coswaves);
-        
+       
+        this.inverse.inverseTransform(this.sinwaves, this.coswaves);
     }
 
 
-    inverseTransform()
-    {
-
-
-    }
 
     update()
     {
@@ -410,9 +435,19 @@ class WaveSim
         this.wave.draw();
         this.sinwaves.draw();
         this.coswaves.draw();
+        this.inverse.draw();
      //  getWavePolyline(original);
      //   getWavePolyline(transfrom);
 
+ 
+    }
+
+    handleMouse(pos, lbdown)
+    {
+        for (var w in waves)
+        {
+            w.handleMouse(pos, lbdown);
+        }        
     }
 
     
@@ -429,7 +464,6 @@ function init()
 var wavesim = new WaveSim();
 function updateAndDraw()
 {
-  
 
     wavesim.update();
     drawServer.draw(new Frame([wavesim], 1));
