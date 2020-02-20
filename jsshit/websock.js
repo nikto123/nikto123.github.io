@@ -167,8 +167,9 @@ class DrawServer
     constructor()
     {
         //init websocket? 
-        this.webSocket = new WebSocket("ws://localhost:8765");
+       // this.webSocket = new WebSocket("ws://localhost:8765");
       
+       /*
         this.webSocket.onmessage = function(event) {
             var msg = JSON.parse(event.data);
 
@@ -179,6 +180,7 @@ class DrawServer
           
             }
         }
+        */
     }
 
     draw(frame)
@@ -244,7 +246,7 @@ class Rect
     {
         if (pos.x > this.ul.x && pos.x < this.dr.x)
         {
-            if (pos.x < this.dr.x && pos.y )
+        //    if (pos.x < this.dr.x && pos.y )
         }
     }
 }
