@@ -2,10 +2,14 @@ var c = document.getElementById("c");
 
 c.addEventListener("wheel", onWheel);
 c.addEventListener("mouseup", onMouseUp);
-c.addEventListener("mouse", onMouseMove);
+c.addEventListener("mousedown", onMouseDown);
+c.addEventListener("mousemove", onMouseMove);
 
-c.width= window.innerWidth;
-c.height=window.innerHeight;
+window.addEventListener("keydown", onKeyDown);
+window.addEventListener("keyup", onKeyUp);
+
+c.width= window.innerWidth-100;
+c.height=window.innerHeight-100;
 
 
 
@@ -19,6 +23,8 @@ var SY = Math.round(h / lineLength);
 
 var ctx = c.getContext("2d");
 
+var mb1Down = false;
+var mb2Down = false;
 
 function getRandomColor()
 {
@@ -244,10 +250,12 @@ class Rect
 
     inside(pos)
     {
-        if (pos.x > this.ul.x && pos.x < this.dr.x)
+        if (pos.x >= this.ul.x && pos.x <= this.dr.x && pos.y >= this.ul.y && pos.y <= this.dr.y)
         {
-        //    if (pos.x < this.dr.x && pos.y )
+           
+            return true;
         }
+        return false;
     }
 }
 
@@ -342,11 +350,12 @@ class Wave
         {
             var from = i - dir;
             while (from < 0) from += values.length;
-            while (from > values.length) from -= values.length;
+            while (from >= values.length) from -= values.length;
             
             values[i] = this.values[from];
         }
         this.values = values;
+        this.changed = true;
     }
 
     getTransform(sinwaves, coswaves)
@@ -359,8 +368,9 @@ class Wave
          
             for (var x = 0; x < this.values.length; x++)
             {
-                sinwaves.values[freq] += this.values[x] * Math.sin(freq*x*this.xfactor);
-                coswaves.values[freq] += this.values[x] * Math.cos(freq*x*this.xfactor);
+                var phase=x*freq*this.xfactor;
+                sinwaves.values[freq] += this.values[x] * Math.sin(phase);
+                coswaves.values[freq] += this.values[x] * Math.cos(phase);
             }  
             sinwaves.values[freq] /= this.values.length;
             coswaves.values[freq] /= this.values.length;    
@@ -382,10 +392,38 @@ class Wave
 
     }
 
+    posToIndex(pos)
+    {
+
+        var d = Math.round((pos.x - this.rect.ul.x) / (this.rect.dr.x - this.rect.ul.x) * this.resolution);
+        
+        if (d >= 0 && d < this.values.length) return d;
+        else return -1;
+    }
+
+    posToValue(pos)
+    {
+        return (pos.y - this.pos.y) / this.scaley ;
+
+    }
+
+
     handleMouse(mouse)
     {
 
 
+    }
+
+    scale(factor)
+    {
+        for (var i = 0; i < this.values.length; i++)
+        {
+            this.values[i] *= factor;
+        }
+        this.values.forEach(val => {
+            val *= factor;
+        });
+        this.changed = true;
     }
 }
 
@@ -394,16 +432,17 @@ class WaveSim
 {
     constructor()
     {
-        var width = w/2.0;
-        var height = 200;
+        var width = w/3.0 * 2.0;
+        var height = h / 4.0;
         var top = 1.0;
         var floor = -1.0;
-        this.wave = new Wave(130.0,w/8.0, 200, width, height, top, floor);
+        var resolution = 150;
+        this.wave = new Wave(resolution,w/6.0, height * 2.0 / 3.0, width, height, top, floor);
         this.wave.genRandom();
 
         var wave = this.wave;
     
-        var transscale = 1.0;
+        var transscale = 0.50;
         this.sinwaves = new Wave(wave.resolution, wave.pos.x, wave.pos.y+height*1.25, width, height, top*transscale, floor*transscale, wave.left, wave.right);
         this.coswaves = new Wave(wave.resolution, wave.pos.x, wave.pos.y+height*2.5, width, height, top*transscale, floor*transscale, wave.left, wave.right);
 
@@ -412,14 +451,35 @@ class WaveSim
 
         this.inverse= new Wave(wave.resolution, wave.pos.x, wave.pos.y+height * 3.25, width, height, top, floor, wave.left, wave.right);
     
-        this.waves = [this.sinwaves, this.coswaves, this.wave, this.inverse];
+        this.waves = [this.sinwaves, this.coswaves, this.wave/*, this.inverse*/];
+
+        this.transform(this.sinwaves, this.coswaves);
+
+        this.keys = new Array();
+        this.keys[37] = false;
+        this.keys[38] = false;
+        this.keys[39] = false;
+        this.keys[40] = false;
+    }
+
+    onKeyDown(key)
+    {
+        this.keys[key] = true;
+
+    }
+
+    onKeyUp(key)
+    {
+        this.keys[key] = false;
     }
 
     transform()
     {
         this.wave.getTransform(this.sinwaves, this.coswaves);
-       
-        this.inverse.inverseTransform(this.sinwaves, this.coswaves);
+        var index = Math.random()* this.sinwaves.values.length;
+
+        this.wave.inverseTransform(this.sinwaves, this.coswaves);
+
     }
 
 
@@ -427,29 +487,108 @@ class WaveSim
     update()
     {
    
-        this.wave.scroll(1);
-        this.transform();
+      //  this.wave.scroll(1);
+        
+       // this.transform();
+
+        if (this.keys[37]) 
+        {
+            this.wave.scroll(-1);
+        }
+        if (this.keys[39])
+        {
+            this.wave.scroll(1);
+        }
+
+        if (this.keys[40])
+        {
+            this.wave.scale(0.97);
+        }
+
+        if (this.keys[38])
+        {
+            this.wave.scale(1.0/0.97);
+        }
+        if (this.wave.changed)
+        {
+            this.wave.changed = false;
+            this.wave.getTransform(this.sinwaves, this.coswaves);
+
+        }
+        else if (this.sinwaves.changed || this.coswaves.changed)
+        {
+            this.sinwaves.changed = this.coswaves.changed = false;
+            this.wave.inverseTransform(this.sinwaves, this.coswaves);
+        }
+
+
     }
 
     draw()
     {
 
-        this.wave.draw();
-        this.sinwaves.draw();
-        this.coswaves.draw();
-        this.inverse.draw();
+        this.waves.forEach(wave => { wave.draw();});
+        
+    //    this.inverse.draw();
      //  getWavePolyline(original);
      //   getWavePolyline(transfrom);
 
  
     }
 
-    handleMouse(pos, lbdown)
+    mouseMove(pos,button)
     {
-        for (var w in waves)
+       
+        if (mb1Down == true)
         {
-            w.handleMouse(pos, lbdown);
-        }        
+            this.waves.forEach(w => 
+            {
+                var changed = false;
+                if (w.rect.inside(pos))
+                {
+                    var index = w.posToIndex(pos);
+                    if (index != -1)
+                    {
+                        var val = w.posToValue(pos);
+                        w.values[index] = -val;
+                        w.changed = true;
+                    }
+                }
+            }); 
+        }
+    }
+
+    mouseDown(pos,button)
+    {
+        this.waves.forEach(w => 
+        {
+            if (w.rect.inside(pos))
+            {
+                var index = w.posToIndex(pos);
+                if (index != -1)
+                {
+                    var val = w.posToValue(pos);
+                    w.values[index] = -val;
+                    w.changed = true;
+                }
+            }
+        });
+    }
+
+    mouseUp(pos,button)
+    {
+        for (w in this.waves)
+        {
+            if (w.rect.inside(pos))
+            {
+                var index = w.posToIndex(pos);
+                if (index != -1)
+                {
+                    w.values[index] = -w.posToValue(pos);
+                    w.chagned = true;
+                }
+            }
+        }
     }
 
     
@@ -472,77 +611,30 @@ function updateAndDraw()
     //new Test().run();
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function onMouseMove(event)
 {
+    wavesim.mouseMove(new Point(event.clientX, event.clientY));
  //   var m = new Point(event.clientX, event.clientY);
     
 //    applyForces(m);
 }
-
-function drawLine(from, to, width=1,color=0)
+function onMouseDown(event)
 {
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.strokeStyle = color;
-    ctx.stroke();
+    mb1Down = true;
+    wavesim.mouseDown(new Point(event.clientX, event.clientY));
 }
 
-
-
-//where world is drawn as:
-//  
-function getWorldPoint(mx, my, sx, sy, dx, dy)
-{
-    return new Point(
-        (mx+dx)*sx,
-        (my+dy)*sy
-    );
-}
-
-function getScreenPoint(wpx, wpy,sx,sy,dx,dy)
-{
-    return new Point(
-        (wpx+dx) / sx+width/2.0,
-        (wpy+dy) / sy+height/2.0
-    );
-}
-
-var worldPt=null;
-
-
-function drawText(text, x,y,lineNum)
-{
-    ctx.fillText(text, x,y+lineNum*20);
-}
 function onMouseUp(event)
 {
- 
+
+    mb1Down = false; 
     var m = new Point(event.clientX, event.clientY);
     var mp = new Point((event.clientX), (event.clientY));
     
     worldPt = getWorldPoint(mp.x, mp.y, scale.x, scale.y, d.x, d.y); 
     var sp = getScreenPoint(worldPt.x, worldPt.y, scale.x, scale.y, d.x, d.y);
-    d.x-=scale.x*(m.x-width/2.0);
-    d.y-=scale.y*(m.y-height/2.0);
+    d.x-=scale.x*(m.x-w/2.0);
+    d.y-=scale.y*(m.y-h/2.0);
 
 
     drawText("mouse:" + mp.x + " " + mp.y, m.x, m.y,0);
@@ -552,9 +644,10 @@ function onMouseUp(event)
     drawText("screen:"+sp.x+" "+sp.y, m.x,m.y,4);
 }
 
+
 function onWheel(event)
 {   
-    var mp = new Point(event.clientX - width / 2.0, event.clientY - height / 2.0);
+    var mp = new Point(event.clientX - w / 2.0, event.clientY - h / 2.0);
    
     var MULT = 1.074;
 
@@ -571,6 +664,57 @@ function onWheel(event)
    // draw();
 }
 
+
+
+function drawLine(from, to, width=1,color=0)
+{
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.strokeStyle = color;
+    ctx.stroke();
+}
+
+
+//where world is drawn as:
+//  
+function getWorldPoint(mx, my, sx, sy, dx, dy)
+{
+    return new Point(
+        (mx+dx)*sx,
+        (my+dy)*sy
+    );
+}
+
+function getScreenPoint(wpx, wpy,sx,sy,dx,dy)
+{
+    return new Point(
+        (wpx+dx) / sx+w/2.0,
+        (wpy+dy) / sy+h/2.0
+    );
+}
+
+var worldPt=null;
+
+function drawText(text, x,y,lineNum)
+{
+    ctx.fillText(text, x,y+lineNum*20);
+}
+
+
+function onKeyDown(event)
+{
+    
+    wavesim.onKeyDown(event.keyCode);
+
+}
+
+function onKeyUp(event)
+{
+    wavesim.onKeyUp(event.keyCode);
+
+}
 
 //setInterval(drawCurve, )
 
