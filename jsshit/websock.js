@@ -77,6 +77,7 @@ class Line
         this.a = a;
         this.b = b;
         this.type = "Line";
+        this.color = color;
     }
 
     draw()
@@ -232,10 +233,9 @@ class Rect
     {
         this.ul = new Point(ulx, uly);
         this.dr = new Point(drx, dry);
-
     }
 
-    draw()
+    draw(width = 1, color='#000000')
     {
         var points = [this.ul, new Point(this.dr.x, this.ul.y), this.dr, new Point(this.ul.x, this.dr.y)];
         
@@ -244,7 +244,7 @@ class Rect
             var next = i+1;
             if (next >= 4) next = 0;
 
-            drawLine(points[i], points[next]);
+            drawLine(points[i], points[next], width, color);
         }
     }
 
@@ -273,6 +273,7 @@ class Wave
         this.transform = new Array(resolution);
         this.rect = new Rect(this.pos.x,       this.pos.y - height/2.0, 
                              this.pos.x+width, this.pos.y + height/2.0);
+        this.selected = false;
     }
 
     setValues(arrayOfValues)
@@ -284,8 +285,6 @@ class Wave
         calculateTransform();
     }
     
-
-
     genRandom()
     {
        var randIter = Math.random()  * this.values.length/10.0;
@@ -308,12 +307,26 @@ class Wave
         }
     }
 
+    select(value)
+    {
+        this.selected = value;
+    }
 
     draw()
     {
-        this.rect.draw();
+        var radius = (this.rect.dr.y - this.rect.ul.y)/2.0;
+        var ringPos = new Point(this.pos.x - radius*1.2, this.pos.y);
+        drawRing(ringPos, this.values, radius*.75, this.scaley/4.0, 1.0);
+        
 
-      
+        if (this.selected == true)
+        {
+            this.rect.draw(4, '#ff0000');
+        }
+        else
+        {
+            this.rect.draw();
+        }
         if (this.drawMode == 0)
         {         
             for (var i = 1; i < this.values.length; i++)
@@ -333,23 +346,8 @@ class Wave
                 drawLine(a,b, lineWidth);           
             }
         }
-      
-
-        
     }
 
-    drawRing(pos)
-    {
-
-            for (var i = 0; i < this.values.length; i++)
-            {
-                var a = (i / this.values.length) * Math.PI * 2.0;
-                var dist = fvalue(a);
-                pos.x + cos(a) * dist;
-                sin(a) * dist;
-            }
-
-    }
 
     setDrawMode(mode)
     {
@@ -375,7 +373,6 @@ class Wave
 
     getTransform(sinwaves, coswaves)
     {
-      
         for (var freq = 0; freq < sinwaves.values.length; freq++)
         {
             sinwaves.values[freq] = 0;
@@ -387,8 +384,8 @@ class Wave
                 sinwaves.values[freq] += this.values[x] * Math.sin(phase);
                 coswaves.values[freq] += this.values[x] * Math.cos(phase);
             }  
-            sinwaves.values[freq] /= this.values.length;
-            coswaves.values[freq] /= this.values.length;    
+            sinwaves.values[freq] /= sinwaves.values.length;
+            coswaves.values[freq] /= coswaves.values.length;    
         }
     }
 
@@ -400,7 +397,14 @@ class Wave
             for (var x = 0; x < sinwaves.values.length; x++)
             {
                 var phase=-freq*x*this.xfactor;
-                this.values[freq] += (Math.cos(phase) * coswaves.values[x] - Math.sin(phase) * sinwaves.values[x]);
+                var c = Math.cos(phase) * coswaves.values[x];
+                var s = Math.sin(phase) * sinwaves.values[x];
+
+                
+                                
+                this.values[freq] += c - s;
+                
+                //this.values[freq] += (Math.cos(phase) * coswaves.values[x] - Math.sin(phase) * sinwaves.values[x]);
              
             }
         }
@@ -451,13 +455,13 @@ class WaveSim
         var height = h / 4.0;
         var top = 1.0;
         var floor = -1.0;
-        var resolution = 150;
+        var resolution = 350;
         this.wave = new Wave(resolution,w/6.0, height * 2.0 / 3.0, width, height, top, floor);
         this.wave.genRandom();
 
         var wave = this.wave;
     
-        var transscale =.10;
+        var transscale =0.250;
         this.sinwaves = new Wave(wave.resolution/2, wave.pos.x, wave.pos.y+height*1.25, width, height, top*transscale, floor*transscale, wave.left, wave.right);
         this.coswaves = new Wave(wave.resolution/2, wave.pos.x, wave.pos.y+height*2.5, width, height, top*transscale, floor*transscale, wave.left, wave.right);
 
@@ -475,6 +479,9 @@ class WaveSim
         this.keys[38] = false;
         this.keys[39] = false;
         this.keys[40] = false;
+
+
+        this.ctrlClicks = false;
     }
 
     onKeyDown(key)
@@ -505,25 +512,41 @@ class WaveSim
       //  this.wave.scroll(1);
         
        // this.transform();
+      if (this.keys[17])
+        {
+            this.ctrlClicks = true;
+        }
+        else 
+        {
+            this.ctrlClicks = false;
+        }
+        this.waves.forEach (wave => {
 
-        if (this.keys[37]) 
-        {
-            this.wave.scroll(-1);
-        }
-        if (this.keys[39])
-        {
-            this.wave.scroll(1);
-        }
+            if (wave.selected == true)
+            {
+  
+                if (this.keys[37]) 
+                {
+                    wave.scroll(-1);
+                }
+                if (this.keys[39])
+                {
+                    wave.scroll(1);
+                }
 
-        if (this.keys[40])
-        {
-            this.wave.scale(0.97);
-        }
+                if (this.keys[40])
+                {
+                    wave.scale(0.97);
+                }
 
-        if (this.keys[38])
-        {
-            this.wave.scale(1.0/0.97);
-        }
+                if (this.keys[38])
+                {
+                    wave.scale(1.0/0.97);
+                }
+            }
+
+        });
+
         if (this.wave.changed)
         {
             this.wave.changed = false;
@@ -535,10 +558,8 @@ class WaveSim
             this.sinwaves.changed = this.coswaves.changed = false;
             this.wave.inverseTransform(this.sinwaves, this.coswaves);
         }
-
-
+        
     }
-
     draw()
     {
 
@@ -559,7 +580,7 @@ class WaveSim
             this.waves.forEach(w => 
             {
                 var changed = false;
-                if (w.rect.inside(pos))
+                if (w.rect.inside(pos) && w.selected == true)
                 {
                     var index = w.posToIndex(pos);
                     if (index != -1)
@@ -577,7 +598,7 @@ class WaveSim
     {
         this.waves.forEach(w => 
         {
-            if (w.rect.inside(pos))
+            if (w.rect.inside(pos) && w.selected == true)
             {
                 var index = w.posToIndex(pos);
                 if (index != -1)
@@ -592,21 +613,57 @@ class WaveSim
 
     mouseUp(pos,button)
     {
-        for (w in this.waves)
+        this.waves.forEach(w =>
         {
+
             if (w.rect.inside(pos))
             {
-                var index = w.posToIndex(pos);
-                if (index != -1)
+                if (this.ctrlClicks)
                 {
-                    w.values[index] = -w.posToValue(pos);
-                    w.chagned = true;
+                    if (w.selected == false)
+                    {
+                        this.select(w);
+                    }
+                    else
+                    {
+                        this.deselect(w);
+                    }
+                }
+                else if (w.selected == false)
+                {
+                    this.select(w);
+                }
+                else
+                {
+               
+                    var index = w.posToIndex(pos);
+                    if (index != -1)
+                    {
+                        w.values[index] = -w.posToValue(pos);
+                        w.changed = true;
+                    }
                 }
             }
-        }
+            else
+            {
+                if (w.selected == true && this.ctrlClicks == false)
+                {
+                    this.deselect(w);
+                }
+            }
+        });
     }
 
     
+    deselect(wave)
+    {
+        wave.select(false);
+    }
+
+    select(wave)
+    {
+        wave.select(true);
+    }
 
 }
 
@@ -642,6 +699,7 @@ function onMouseDown(event)
 function onMouseUp(event)
 {
 
+    wavesim.mouseUp(new Point(event.clientX, event.clientY));
     mb1Down = false; 
     var m = new Point(event.clientX, event.clientY);
     var mp = new Point((event.clientX), (event.clientY));
@@ -681,7 +739,7 @@ function onWheel(event)
 
 
 
-function drawLine(from, to, width=1,color=0)
+function drawLine(from, to, width=1,color='#000000')
 {
     ctx.lineWidth = width;
     ctx.beginPath();
@@ -691,6 +749,35 @@ function drawLine(from, to, width=1,color=0)
     ctx.stroke();
 }
 
+
+
+function drawRing(pos, values, radius, fscale = 1.0, lineWidth = 1.0, lineColor = '#000000')
+{
+    var aDiff = 1.0/ values.length * Math.PI * 2.0;
+    var a = 0.0;
+    var prevPt = null;
+    var firstPt = null;
+    for (var i = 0; i < values.length; i++)
+    {
+
+        var fval = values[i];
+
+        var pt = new Point(pos.x + Math.cos(a) * (radius + fval*fscale), pos.y + Math.sin(a) * (radius + fval*fscale));
+        if (prevPt != null)
+        {
+            drawLine(prevPt, pt, 3.0);
+        }
+        else 
+        {
+            firstPt = pt;
+        }
+        
+        prevPt = pt;
+        a += aDiff;
+    }
+    drawLine(prevPt, firstPt);
+
+}
 
 //where world is drawn as:
 //  
