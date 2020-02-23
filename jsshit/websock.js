@@ -270,7 +270,7 @@ class Wave
         this.pos = new Point(posx, posy);
         this.resolution = resolution;
         this.values = new Array(resolution);
-        this.transform = new Array(resolution * 2);
+        this.transform = new Array(resolution);
         this.rect = new Rect(this.pos.x,       this.pos.y - height/2.0, 
                              this.pos.x+width, this.pos.y + height/2.0);
     }
@@ -288,12 +288,11 @@ class Wave
 
     genRandom()
     {
-        var randIter = Math.random()  * this.values.length/10.0;
+       var randIter = Math.random()  * this.values.length/10.0;
        for (var i = 0; i < this.values.length; i++)
-            {
-        this.values[i] = 0;
-
-            }
+       {
+           this.values[i] = 0;
+       }
         for (var j = 0; j < randIter; j++)
         {
             var randFreq = this.values.length*Math.random();
@@ -314,6 +313,7 @@ class Wave
     {
         this.rect.draw();
 
+      
         if (this.drawMode == 0)
         {         
             for (var i = 1; i < this.values.length; i++)
@@ -323,7 +323,7 @@ class Wave
                 drawLine(a,b, 2);
             }
         }
-        else
+        else if (this.drawMode == 1)
         {
             var lineWidth = (this.rect.dr.x - this.rect.ul.x) / this.resolution;
             for (var i = 0; i < this.values.length; i++)
@@ -333,7 +333,22 @@ class Wave
                 drawLine(a,b, lineWidth);           
             }
         }
+      
+
         
+    }
+
+    drawRing(pos)
+    {
+
+            for (var i = 0; i < this.values.length; i++)
+            {
+                var a = (i / this.values.length) * Math.PI * 2.0;
+                var dist = fvalue(a);
+                pos.x + cos(a) * dist;
+                sin(a) * dist;
+            }
+
     }
 
     setDrawMode(mode)
@@ -361,7 +376,7 @@ class Wave
     getTransform(sinwaves, coswaves)
     {
       
-        for (var freq = 0; freq < this.values.length; freq++)
+        for (var freq = 0; freq < sinwaves.values.length; freq++)
         {
             sinwaves.values[freq] = 0;
             coswaves.values[freq] = 0;
@@ -382,7 +397,7 @@ class Wave
         for (var freq = 0; freq < this.values.length; freq++)
         {
             this.values[freq] = 0;
-            for (var x = 0; x < this.values.length; x++)
+            for (var x = 0; x < sinwaves.values.length; x++)
             {
                 var phase=-freq*x*this.xfactor;
                 this.values[freq] += (Math.cos(phase) * coswaves.values[x] - Math.sin(phase) * sinwaves.values[x]);
@@ -442,14 +457,14 @@ class WaveSim
 
         var wave = this.wave;
     
-        var transscale = 0.50;
-        this.sinwaves = new Wave(wave.resolution, wave.pos.x, wave.pos.y+height*1.25, width, height, top*transscale, floor*transscale, wave.left, wave.right);
-        this.coswaves = new Wave(wave.resolution, wave.pos.x, wave.pos.y+height*2.5, width, height, top*transscale, floor*transscale, wave.left, wave.right);
+        var transscale =.10;
+        this.sinwaves = new Wave(wave.resolution/2, wave.pos.x, wave.pos.y+height*1.25, width, height, top*transscale, floor*transscale, wave.left, wave.right);
+        this.coswaves = new Wave(wave.resolution/2, wave.pos.x, wave.pos.y+height*2.5, width, height, top*transscale, floor*transscale, wave.left, wave.right);
 
         this.sinwaves.setDrawMode(1);
         this.coswaves.setDrawMode(1);
 
-        this.inverse= new Wave(wave.resolution, wave.pos.x, wave.pos.y+height * 3.25, width, height, top, floor, wave.left, wave.right);
+      //  this.inverse= new Wave(wave.resolution, wave.pos.x, wave.pos.y+height * 3.25, width, height, top, floor, wave.left, wave.right);
     
         this.waves = [this.sinwaves, this.coswaves, this.wave/*, this.inverse*/];
 
