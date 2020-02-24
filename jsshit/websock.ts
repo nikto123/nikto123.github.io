@@ -1,3 +1,5 @@
+
+import graphics from "graphics"
 var c = document.getElementById("c");
 
 c.addEventListener("wheel", onWheel);
@@ -574,7 +576,6 @@ class WaveSim
 
     mouseMove(pos,button)
     {
-       
         if (mb1Down == true)
         {
             this.waves.forEach(w => 
