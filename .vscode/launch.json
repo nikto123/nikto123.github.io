@@ -11,7 +11,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "file": "${workspaceFolder}/jsshit/websock.html"
+            "file": "${workspaceFolder}/fttoy/fttoy.html"
         }
     ]
 }
