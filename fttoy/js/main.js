@@ -604,3 +604,4 @@ function onKeyUp(event) {
 //drawCurve();
 init();
 setInterval(updateAndDraw, 10);
+//# sourceMappingURL=main.js.map

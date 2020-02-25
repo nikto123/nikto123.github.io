@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-tsc ts/ 
+tsc ./ts/*.ts -outDir ./js/ 
