@@ -693,7 +693,7 @@ function onMouseMove(event)
 }
 function onMouseDown(event)
 {
-    audioCtx.resume();
+  //  audioCtx.resume();
     mb1Down = true;
     wavesim.mouseDown(new Point(event.clientX, event.clientY));
 }
