@@ -1,14 +1,22 @@
-"use strict";
-exports.__esModule = true;
-var c = document.getElementById("c");
+"use strict"
+
+//import * as drawing from "./graphics";
+
+//drawing.setup(c,h); 
+
+
+var c = <HTMLCanvasElement> document.getElementById("c");
 c.addEventListener("wheel", onWheel);
 c.addEventListener("mouseup", onMouseUp);
 c.addEventListener("mousedown", onMouseDown);
 c.addEventListener("mousemove", onMouseMove);
+
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
+
 c.width = window.innerWidth - 100;
 c.height = window.innerHeight - 100;
+
 var w = c.width;
 var h = c.height;
 var lineWidth = 16.0;
@@ -18,6 +26,7 @@ var SY = Math.round(h / lineLength);
 var ctx = c.getContext("2d");
 var mb1Down = false;
 var mb2Down = false;
+
 function getRandomColor() {
     var letters = "0123456789ABCDEF";
     // html color code starts with # 
@@ -40,7 +49,7 @@ function getRandomPolyline() {
         var radius = Math.random() * centerX / 2.0 + 100.0;
         points.push(new Point(c * radius + centerX, s * radius + centerY));
     }
-    return polyLine = new Polyline(points, 8.0, getRandomColor());
+    return new Polyline(points, 8.0, getRandomColor());
 }
 var Point = /** @class */ (function () {
     function Point(x, y) {
@@ -217,7 +226,6 @@ var Wave = /** @class */ (function () {
         for (var i = 0; i < arrayOfValues.length; i++) {
             this.values[i] = arrayOfValues[i];
         }
-        calculateTransform();
     };
     Wave.prototype.genRandom = function () {
         var randIter = Math.random() * this.values.length / 10.0;
@@ -516,7 +524,7 @@ function onWheel(event) {
     }
     // draw();
 }
-function drawLine(from, to, width, color) {
+function drawLine(from, to, width=1, color) {
     if (width === void 0) { width = 1; }
     if (color === void 0) { color = '#000000'; }
     ctx.lineWidth = width;
@@ -526,7 +534,7 @@ function drawLine(from, to, width, color) {
     ctx.strokeStyle = color;
     ctx.stroke();
 }
-function drawRing(pos, values, radius, fscale, lineWidth, lineColor) {
+function drawRing(pos, values, radius, fscale, lineWidth, lineColor="#000000") {
     if (fscale === void 0) { fscale = 1.0; }
     if (lineWidth === void 0) { lineWidth = 1.0; }
     if (lineColor === void 0) { lineColor = '#000000'; }

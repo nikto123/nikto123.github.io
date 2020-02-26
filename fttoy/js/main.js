@@ -1,5 +1,6 @@
 "use strict";
-exports.__esModule = true;
+//import * as drawing from "./graphics";
+//drawing.setup(c,h); 
 var c = document.getElementById("c");
 c.addEventListener("wheel", onWheel);
 c.addEventListener("mouseup", onMouseUp);
@@ -40,7 +41,7 @@ function getRandomPolyline() {
         var radius = Math.random() * centerX / 2.0 + 100.0;
         points.push(new Point(c * radius + centerX, s * radius + centerY));
     }
-    return polyLine = new Polyline(points, 8.0, getRandomColor());
+    return new Polyline(points, 8.0, getRandomColor());
 }
 var Point = /** @class */ (function () {
     function Point(x, y) {
@@ -241,7 +242,6 @@ var Wave = /** @class */ (function () {
         for (var i = 0; i < arrayOfValues.length; i++) {
             this.values[i] = arrayOfValues[i];
         }
-        calculateTransform();
     };
     Wave.prototype.genRandom = function () {
         var randIter = Math.random() * this.values.length / 10.0;
@@ -541,6 +541,7 @@ function onWheel(event) {
     // draw();
 }
 function drawLine(from, to, width, color) {
+    if (width === void 0) { width = 1; }
     if (width === void 0) {
         width = 1;
     }
@@ -555,6 +556,7 @@ function drawLine(from, to, width, color) {
     ctx.stroke();
 }
 function drawRing(pos, values, radius, fscale, lineWidth, lineColor) {
+    if (lineColor === void 0) { lineColor = "#000000"; }
     if (fscale === void 0) {
         fscale = 1.0;
     }
