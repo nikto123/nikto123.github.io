@@ -1,10 +1,9 @@
 
-import { Vec2 } from "./graphics";
-//import * as foo from "./graphics";
+import { Vec2, drawLine, Frame } from "./graphics";
+import * as foo from "./graphics";
 
-drawLine(1,1,1,1);
 
-drawLine()
+
 
 interface MouseInput {
     onMouseMove(event : MouseEvent);
@@ -39,6 +38,7 @@ class Mouse implements MouseInput
     num_buttons : Number = 3;
 
     pos : Vec2;
+    diff : Vec2 = new Vec2(0, 0);
 
     mouseDown(bIndex : number)
     {
@@ -82,6 +82,7 @@ class Mouse implements MouseInput
 
     mouseMove(newX, newY)
     {
+        
         this.pos.x = newX;
         this.pos.y = newY;
     
@@ -94,7 +95,7 @@ class Mouse implements MouseInput
                 {
                     this.startDrag(i);
                 }
-                this.mouseDrag(x, y)
+                this.mouseDrag(this.pos.x, this.pos.y);
             }
             
         }
@@ -110,4 +111,107 @@ class Mouse implements MouseInput
     }
 
 }
+class WebsockServer 
+{
 
+}
+
+
+
+
+var DrawServer = /** @class */ (function () {
+    function DrawServer() {
+        //init websocket? 
+        // this.webSocket = new WebSocket("ws://localhost:8765");
+        /*
+         this.webSocket.onmessage = function(event) {
+             var msg = JSON.parse(event.data);
+ 
+             if (msg.type == "Frame")
+             {
+                 Object.setPrototypeOf(msg, Frame.prototype);
+                 drawServer.lastFrame = msg;
+           
+             }
+         }
+         */
+    }
+    DrawServer.prototype.draw = function (frame) {
+        //   var jsonFrame = JSON.stringify(frame);
+        // frame = this.frameFromJson(jsonFrame);
+        //     console.log(jsonFrame);
+        if (frame.clear) {
+            ctx.clearRect(0, 0, SX * lineLength, SY * lineLength);
+        }
+        frame.drawObjects.forEach(function (item) {
+            switch (item.type) {
+                case "Polyline":
+                    Object.setPrototypeOf(item, Polyline.prototype);
+                    break;
+                case "Line":
+                    Object.setPrototypeOf(item, Line.prototype);
+                    break;
+                default:
+                    break;
+            }
+            item.draw();
+        });
+    };
+    DrawServer.prototype.frameFromJson = function (jsonFrame) {
+        var frame = JSON.parse(jsonFrame);
+        return frame;
+    };
+    return DrawServer;
+}());
+
+
+class WebSockClient
+{
+    websocket: WebSocket;
+
+    constructor(url : string)
+    {
+        this.websocket = new WebSocket(url);
+        var shit = this;
+        this.websocket.onmessage = function(ev : MessageEvent)
+        {
+            shit.processMessage(JSON.parse(ev.data));
+      //      this.processMessage(JSON.parse(ev.data))
+        } 
+    }
+
+    processMessage(jsonData: any)
+    { 
+        switch (jsonData.)
+    }
+
+    draw(frame: Frame)
+    {
+
+    }
+
+}
+
+class Engine
+{
+    mouse: Mouse;
+
+    drawClient: WebSockClient;
+
+    connect(clientUrl: string)
+    {
+        this.drawClient = new WebSockClient("ws://localhost:8765"); 
+        
+
+    }
+    update()
+    {
+
+    }
+
+    render()
+    {
+
+
+    }
+}
