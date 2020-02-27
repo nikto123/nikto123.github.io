@@ -9,42 +9,68 @@ export function setup(c : HTMLCanvasElement, receiver : MouseInput)
 
 export default 342;
 interface MouseInput {
-    onMouseMove();
-    onMouseDown();
-    onMouseUp();
-    onMouseWheel();
+    onMouseMove(event : MouseEvent);
+    onMouseDown(event : MouseEvent);
+    onMouseUp(event : MouseEvent);
+    onMouseWheel(event : MouseEvent);
 }
 
-class Mouse 
+class Vec2
 {
-    //num_buttons static
-    bState : [ false, false, false ];
-    dragState : [false, false, false];
-    x : Number;
-    y : Number;
+    x : number;
+    y : number;
+}
 
-    mouseMove(newX, newY)
-    {
-        this.x = newX;
-        this.y = newY;
-    
-    
-        for (var i = 0; i < 3; i++)
-        {
-            if (this.bState[i] == true)
-            {
-                if (this.dragState[i] == false)
-                {
-                    startDrag(i);
-                }
-            }
-            
-        }
+class Mouse implements MouseInput
+{
+
+    onMouseMove(event : MouseEvent) {
+        this.mouseMove(event.pageX, event.pageY); 
+        throw new Error("Method not implemented.");
+    }
+    onMouseDown(event : MouseEvent) {
+        this.mouseDown(event.button); 
+        throw new Error("Method not implemented.");
+    }
+    onMouseUp(event : MouseEvent) {
+        this.mouseUp(event.button); 
+        throw new Error("Method not implemented.");
+    }
+    onMouseWheel(event : MouseEvent) {
+        this.mouseMove(event.offsetX); 
+        throw new Error("Method not implemented.");
     }
 
-    startDrag()
-    {  
+    //num_buttons static
+    bState : boolean[] = [false, false, false];
+    dragState : boolean[] = [false, false, false];
+    num_buttons : Number = 3;
 
+    pos : Vec2;
+
+
+
+
+
+    mouseDown(bIndex : number)
+    {
+        this.bState[bIndex] = true;
+
+        //onDownCallback
+    }
+
+    mouseUp(bIndex : number)
+    {
+        this.bState[bIndex] = false;
+    }
+
+    mouseDrag(x, y)
+    {
+        
+    }
+    startDrag(bIndex : number)
+    {  
+        this.dragState[bIndex] = true;
         //mappedCallback()
     }
 
@@ -54,24 +80,26 @@ class Mouse
         //mappedCallback()
     }
 
-    mouseDrag(x, y)
+
+    mouseMove(newX, newY)
     {
-        
-
+        this.pos.x = newX;
+        this.pos.y = newY;
+    
+    
+        for (var i = 0; this.num_buttons < 3; i++)
+        {
+            if (this.bState[i] == true)
+            {
+                if (this.dragState[i] == false)
+                {
+                    this.startDrag(i);
+                }
+                this.mouseDrag(x, y)
+            }
+            
+        }
     }
-
-    mbDown(bIndex : string)
-    {
-        this.bState[bIndex] = true;
-
-        //onDownCallback
-    }
-
-    mbUp(bIndex : number)
-    {
-        this.bState[bIndex] = false;
-    }
-
 }
 
 
