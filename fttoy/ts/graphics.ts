@@ -7,7 +7,11 @@ export function setup(c : HTMLCanvasElement, receiver : MouseInput)
     setupInput(c, receiver);
 }
 
-export default 342;
+class Vec2
+{
+    x : number;
+    y : number;
+}
 interface MouseInput {
     onMouseMove(event : MouseEvent);
     onMouseDown(event : MouseEvent);
@@ -15,15 +19,8 @@ interface MouseInput {
     onMouseWheel(event : MouseEvent);
 }
 
-class Vec2
-{
-    x : number;
-    y : number;
-}
-
 class Mouse implements MouseInput
 {
-
     onMouseMove(event : MouseEvent) {
         this.mouseMove(event.pageX, event.pageY); 
         throw new Error("Method not implemented.");
@@ -37,7 +34,8 @@ class Mouse implements MouseInput
         throw new Error("Method not implemented.");
     }
     onMouseWheel(event : MouseEvent) {
-        this.mouseMove(event.offsetX); 
+        
+        this.mouseWheel(event.offsetX); //offsetY?
         throw new Error("Method not implemented.");
     }
 
@@ -48,10 +46,6 @@ class Mouse implements MouseInput
 
     pos : Vec2;
 
-
-
-
-
     mouseDown(bIndex : number)
     {
         this.bState[bIndex] = true;
@@ -59,24 +53,35 @@ class Mouse implements MouseInput
         //onDownCallback
     }
 
+    mouseWheel(scrollAmount : number)
+    {
+        
+    }
+
     mouseUp(bIndex : number)
     {
         this.bState[bIndex] = false;
+        if (this.dragState[bIndex] == true)
+        {
+            this.endDrag(bIndex);
+        }
     }
 
     mouseDrag(x, y)
     {
         
     }
+
     startDrag(bIndex : number)
     {  
         this.dragState[bIndex] = true;
         //mappedCallback()
     }
 
-    endDrag()
+    endDrag(bIndex : number)
     {
 
+        this.dragState[bIndex] = false;
         //mappedCallback()
     }
 
@@ -100,18 +105,18 @@ class Mouse implements MouseInput
             
         }
     }
-}
-
-
-
-function setupInput(c : HTMLCanvasElement, inputReceiver : MouseInput)
-{
-    c.addEventListener("wheel", inputReceiver.onMouseWheel);
-    c.addEventListener("mouseup", inputReceiver.onMouseUp);
-    c.addEventListener("mousedown", inputReceiver.onMouseDown);
-    c.addEventListener("mousemove", inputReceiver.onMouseMove);
+        
+    setupInput(element : HTMLElement, inputReceiver : MouseInput)
+    {
+        element.addEventListener("wheel", inputReceiver.onMouseWheel);
+        element.addEventListener("mouseup", inputReceiver.onMouseUp);
+        element.addEventListener("mousedown", inputReceiver.onMouseDown);
+        element.addEventListener("mousemove", inputReceiver.onMouseMove);
+    }
 
 }
+
+
 
 function drawLine(from, to, width=1, color) {
     if (width === void 0) { width = 1; }
