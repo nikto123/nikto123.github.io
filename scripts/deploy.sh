@@ -1,2 +1,3 @@
 #/usr/bin/env bash
-apt install npm -y
+
+git add . && git commit -m "update" && git push
