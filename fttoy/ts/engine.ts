@@ -2,10 +2,13 @@
 import { Vec2, drawLine, Frame } from "./graphics";
 import * as foo from "./graphics";
 
+interface Input 
+{
+    setupInput(element : HTMLElement);
+}
 
 
-
-interface MouseInput {
+interface MouseInput extends Input{
     onMouseMove(event : MouseEvent);
     onMouseDown(event : MouseEvent);
     onMouseUp(event : MouseEvent);
@@ -14,31 +17,43 @@ interface MouseInput {
 
 class Mouse implements MouseInput
 {
-    onMouseMove(event : MouseEvent) {
-        this.mouseMove(event.pageX, event.pageY); 
-        throw new Error("Method not implemented.");
-    }
-    onMouseDown(event : MouseEvent) {
-        this.mouseDown(event.button); 
-        throw new Error("Method not implemented.");
-    }
-    onMouseUp(event : MouseEvent) {
-        this.mouseUp(event.button); 
-        throw new Error("Method not implemented.");
-    }
-    onMouseWheel(event : MouseEvent) {
-        
-        this.mouseWheel(event.offsetX); //offsetY?
-        throw new Error("Method not implemented.");
-    }
+ 
+    handleMouseCallback: (ev : MouseEvent) => void;
 
     //num_buttons static
     bState : boolean[] = [false, false, false];
     dragState : boolean[] = [false, false, false];
-    num_buttons : Number = 3;
+    num_buttons : number = 3;
 
     pos : Vec2;
     diff : Vec2 = new Vec2(0, 0);
+    wheelDiff: number;
+    wheelPos: number = 0;
+
+    onMouseMove(event : MouseEvent) {
+        this.mouseMove(event.pageX, event.pageY);
+        this.handleMouseCallback(event);
+    }
+    onMouseDown(event : MouseEvent) {
+        this.mouseDown(event.button);
+        this.handleMouseCallback(event);
+    }
+    onMouseUp(event : MouseEvent) {
+        this.mouseUp(event.button); 
+        this.handleMouseCallback(event);
+    }
+    onMouseWheel(event : MouseEvent) {
+        this.mouseWheel(event.offsetX); //offsetY?
+        this.handleMouseCallback(event);
+    }
+
+    setupInput(element: HTMLElement) 
+    {
+        element.addEventListener("mousemove", this.onMouseMove);
+        element.addEventListener("mouseup", this.onMouseUp);
+        element.addEventListener("mousedown", this.onMouseDown);
+        element.addEventListener("mousewheel", this.onMouseWheel);
+    }
 
     mouseDown(bIndex : number)
     {
@@ -49,7 +64,8 @@ class Mouse implements MouseInput
 
     mouseWheel(scrollAmount : number)
     {
-        
+        this.wheelDiff = scrollAmount;
+        this.wheelPos += this.wheelDiff;
     }
 
     mouseUp(bIndex : number)
@@ -61,7 +77,7 @@ class Mouse implements MouseInput
         }
     }
 
-    mouseDrag(x, y)
+    mouseDrag(x: number, y:number)
     {
         
     }
@@ -80,7 +96,7 @@ class Mouse implements MouseInput
     }
 
 
-    mouseMove(newX, newY)
+    mouseMove(newX: number, newY: number)
     {
         
         this.pos.x = newX;
@@ -100,27 +116,42 @@ class Mouse implements MouseInput
             
         }
     }
-    
-        
-    setupInput(element : HTMLElement, inputReceiver : MouseInput)
+}
+
+
+class Keyboard implements Input
+{
+    setupInput(element: HTMLElement) 
     {
-        element.addEventListener("wheel", inputReceiver.onMouseWheel);
-        element.addEventListener("mouseup", inputReceiver.onMouseUp);
-        element.addEventListener("mousedown", inputReceiver.onMouseDown);
-        element.addEventListener("mousemove", inputReceiver.onMouseMove);
+        element.addEventListener("keydown", this.onKeyDown);
+        element.addEventListener("keyup", this.onKeyUp);    
+    }
+    keys: Array<boolean>;
+    onKeyDown(event: KeyboardEvent)
+    {
+        this.keys[event.keyCode] = true;
+    }
+
+    onKeyUp(event:KeyboardEvent)
+    {
+        this.keys[event.keyCode] = false;
+    }
+
+    getKey(key: number)
+    {
+        return this.keys[key];
     }
 
 }
-class WebsockServer 
+
+
+class DrawClient 
 {
+    ctx: CanvasRenderingContext2D;
 
-}
-
-
-
-
-var DrawServer = /** @class */ (function () {
-    function DrawServer() {
+    constructor(ctx: CanvasRenderingContext2D)
+    {
+        this.ctx = ctx;
         //init websocket? 
         // this.webSocket = new WebSocket("ws://localhost:8765");
         /*
@@ -136,82 +167,142 @@ var DrawServer = /** @class */ (function () {
          }
          */
     }
-    DrawServer.prototype.draw = function (frame) {
-        //   var jsonFrame = JSON.stringify(frame);
-        // frame = this.frameFromJson(jsonFrame);
-        //     console.log(jsonFrame);
-        if (frame.clear) {
-            ctx.clearRect(0, 0, SX * lineLength, SY * lineLength);
-        }
-        frame.drawObjects.forEach(function (item) {
-            switch (item.type) {
-                case "Polyline":
-                    Object.setPrototypeOf(item, Polyline.prototype);
-                    break;
-                case "Line":
-                    Object.setPrototypeOf(item, Line.prototype);
-                    break;
-                default:
-                    break;
-            }
-            item.draw();
-        });
-    };
-    DrawServer.prototype.frameFromJson = function (jsonFrame) {
-        var frame = JSON.parse(jsonFrame);
-        return frame;
-    };
-    return DrawServer;
-}());
+
+
+ 
+}
 
 
 class WebSockClient
 {
     websocket: WebSocket;
 
-    constructor(url : string)
+    constructor(url : string, processMessageCallback: any = null)
     {
         this.websocket = new WebSocket(url);
         var shit = this;
-        this.websocket.onmessage = function(ev : MessageEvent)
-        {
-            shit.processMessage(JSON.parse(ev.data));
-      //      this.processMessage(JSON.parse(ev.data))
-        } 
+        this.websocket.onmessage = processMessageCallback;
     }
 
-    processMessage(jsonData: any)
-    { 
-        switch (jsonData.)
-    }
-
-    draw(frame: Frame)
+    sendMessage(jsonData: Object)
     {
-
+        this.websocket.send(JSON.stringify(jsonData));
     }
 
+    isConnected()
+    {
+        return this.websocket.readyState == WebSocket.OPEN;
+    }
 }
 
-class Engine
+class Engine implements Input
 {
     mouse: Mouse;
+    keyboard: Keyboard;
+    websockClient: WebSockClient;
 
-    drawClient: WebSockClient;
-
-    connect(clientUrl: string)
+    connect(serverUrl: string = "ws://localhost:1234")
     {
-        this.drawClient = new WebSockClient("ws://localhost:8765"); 
+        this.websockClient = new WebSockClient(serverUrl, this.handleMessage);
+        if (this.websockClient.websocket.readyState == WebSocket.OPEN)
+        {
+            this.websockClient.websocket.onmessage = this.handleMessage;
+        }
+    }
+
+    handleMessage()
+    {
+        
+    }
+        
+    setupInput(element : HTMLElement)
+    {
+        this.mouse.setupInput(element);
+        this.mouse.handleMouseCallback = this.handleMouse;
+
+        this.keyboard.setupInput(element);
+        this.keyboard.handleKeyobardCallback = this.handleKeyboard;
+
         
 
     }
-    update()
-    {
 
+    handleKeyboard(event:KeyboardEvent)
+    {       
+
+        switch(event.type )
+        {
+            case "keydown":
+                //forEach keyboardable
+                break;
+            case "keyup":
+                //foreach keyboardable
+                break;
+            default:
+                break;
+        }
+        this.keyboard.onKeyDown(event);
+
+        if (this.websockClient.isConnected())
+        {     
+            var msg: any= {};
+
+            msg.type = event.type;
+            msg.keyCode = event.keyCode;
+            this.websockClient.sendMessage(JSON.stringify(msg));
+        }
     }
 
-    render()
+    handleMouse(event: MouseEvent)
     {
+        var msg: any= {};
+        
+        switch (event.type)
+        {
+            case "mouseup":
+                break;
+            case "mousedown":
+                break;
+            case "mousemove":
+                break;
+            
+            default:
+                break;
 
+        }       
+        if (this.websockClient.isConnected())
+        {   
+            var msg: any= {};
 
+            msg.type = event.type;
+            msg.pos = this.mouse.pos;
+            msg.diff = this.mouse.diff;
+            msg.wheelDiff = this.mouse.wheelDiff;
+            msg.wheelPos = this.mouse.wheelPos;
+            this.websockClient.sendMessage(JSON.stringify(msg));
+
+        }
     }
+        
+ 
+     draw(frame: Frame) 
+    {
+        //   var jsonFrame = JSON.stringify(frame);
+        // frame = this.frameFromJson(jsonFrame);
+        //     console.log(jsonFrame);
+        if (frame.clearBeforeDraw) 
+        {
+            ctx.clearRect(0, 0, SX * lineLength, SY * lineLength);
+        }
+
+        frame.drawObjects.forEach(function (item) 
+        {
+            item.draw(this.ctx);
+        });
+    };
+
+    frameFromJson(jsonFrame: string) {
+        var frame = JSON.parse(jsonFrame);
+        return frame;
+    };
 }

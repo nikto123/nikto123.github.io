@@ -50,10 +50,9 @@ export function drawRing(pos: Vec2, values : Array<number>, radius: number, fsca
     drawLine(prevPt, firstPt);
 }
 
-interface Drawable {
-
+interface Drawable 
+{
     draw(drawContext: CanvasRenderingContext2D);
-    
 }
 
 export class Frame implements Drawable {
@@ -81,54 +80,8 @@ export class Frame implements Drawable {
     {
         if (this.clearBeforeDraw)
         {
-            drawRect()     
+            // drawRect     
         }
     }
-
-
-
 }
-var DrawServer = /** @class */ (function () {
-    function DrawServer() {
-        //init websocket? 
-        // this.webSocket = new WebSocket("ws://localhost:8765");
-        /*
-         this.webSocket.onmessage = function(event) {
-             var msg = JSON.parse(event.data);
- 
-             if (msg.type == "Frame")
-             {
-                 Object.setPrototypeOf(msg, Frame.prototype);
-                 drawServer.lastFrame = msg;
-           
-             }
-         }
-         */
-    }
-    DrawServer.prototype.draw = function (frame) {
-        //   var jsonFrame = JSON.stringify(frame);
-        // frame = this.frameFromJson(jsonFrame);
-        //     console.log(jsonFrame);
-        if (frame.clear) {
-            ctx.clearRect(0, 0, SX * lineLength, SY * lineLength);
-        }
-        frame.drawObjects.forEach(function (item) {
-            switch (item.type) {
-                case "Polyline":
-                    Object.setPrototypeOf(item, Polyline.prototype);
-                    break;
-                case "Line":
-                    Object.setPrototypeOf(item, Line.prototype);
-                    break;
-                default:
-                    break;
-            }
-            item.draw();
-        });
-    };
-    DrawServer.prototype.frameFromJson = function (jsonFrame) {
-        var frame = JSON.parse(jsonFrame);
-        return frame;
-    };
-    return DrawServer;
-}());
+
