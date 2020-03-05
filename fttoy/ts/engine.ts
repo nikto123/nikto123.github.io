@@ -15,6 +15,12 @@ interface MouseInput extends Input{
     onMouseWheel(event : MouseEvent);
 }
 
+interface KeyboardInput extends Input{
+    onKeyDown(event: KeyboardEvent);
+    onKeyUp(event:KeyboardEvent);
+    getKey(key: number): boolean;
+}
+
 class Mouse implements MouseInput
 {
  
@@ -119,8 +125,10 @@ class Mouse implements MouseInput
 }
 
 
-class Keyboard implements Input
-{
+class Keyboard implements KeyboardInput
+{   
+    handleKbCallback: (ev : KeyboardEvent) => void; // sem asi event type a send device (pre nested objekty nech sa vedia pohrabat a ohandlovat si sracky)
+
     setupInput(element: HTMLElement) 
     {
         element.addEventListener("keydown", this.onKeyDown);
@@ -130,18 +138,19 @@ class Keyboard implements Input
     onKeyDown(event: KeyboardEvent)
     {
         this.keys[event.keyCode] = true;
+        this.handleKbCallback(event);
     }
 
     onKeyUp(event:KeyboardEvent)
     {
         this.keys[event.keyCode] = false;
+        this.handleKbCallback(event);
     }
 
-    getKey(key: number)
+    getKey(key: number) : boolean
     {
         return this.keys[key];
     }
-
 }
 
 
@@ -195,11 +204,57 @@ class WebSockClient
     }
 }
 
-class Engine implements Input
+export class Node<DataType>
+{
+    children: Array<Node<DataType>>;
+    public data: DataType;
+
+    constructor(data: DataType)
+    {
+        this.data = data;
+    }
+
+    public createChild(childData: DataType)
+    {
+        this.children.push(new Node<DataType>(childData));
+
+    }
+
+    public addChild(node:Node<DataType>)
+    {
+        this.children.push(node);
+    }
+}
+
+
+interface MessageHandler 
+{
+    handleMessage(msg: any);
+}
+
+interface InputHandler extends Input
+{
+    handleMouse(ev: MouseEvent);
+    handleKeyboard(ev: KeyboardEvent);
+}
+
+interface App extends InputHandler, MessageHandler
+{
+
+}
+
+class Engine implements InputHandler
 {
     mouse: Mouse;
     keyboard: Keyboard;
     websockClient: WebSockClient;
+    app: App;
+    
+
+    constructor(app: App)
+    {
+        this.app = app;
+    }
 
     connect(serverUrl: string = "ws://localhost:1234")
     {
@@ -210,9 +265,9 @@ class Engine implements Input
         }
     }
 
-    handleMessage()
+    handleMessage(msg: any)
     {
-        
+        this.app.handleMessage(msg);
     }
         
     setupInput(element : HTMLElement)
@@ -221,28 +276,12 @@ class Engine implements Input
         this.mouse.handleMouseCallback = this.handleMouse;
 
         this.keyboard.setupInput(element);
-        this.keyboard.handleKeyobardCallback = this.handleKeyboard;
-
-        
-
+        this.keyboard.handleKbCallback = this.handleKeyboard;
     }
 
     handleKeyboard(event:KeyboardEvent)
     {       
-
-        switch(event.type )
-        {
-            case "keydown":
-                //forEach keyboardable
-                break;
-            case "keyup":
-                //foreach keyboardable
-                break;
-            default:
-                break;
-        }
-        this.keyboard.onKeyDown(event);
-
+        
         if (this.websockClient.isConnected())
         {     
             var msg: any= {};
@@ -255,32 +294,16 @@ class Engine implements Input
 
     handleMouse(event: MouseEvent)
     {
-        var msg: any= {};
-        
-        switch (event.type)
-        {
-            case "mouseup":
-                break;
-            case "mousedown":
-                break;
-            case "mousemove":
-                break;
-            
-            default:
-                break;
-
-        }       
+             
         if (this.websockClient.isConnected())
         {   
             var msg: any= {};
-
             msg.type = event.type;
             msg.pos = this.mouse.pos;
             msg.diff = this.mouse.diff;
             msg.wheelDiff = this.mouse.wheelDiff;
             msg.wheelPos = this.mouse.wheelPos;
             this.websockClient.sendMessage(JSON.stringify(msg));
-
         }
     }
         
@@ -299,10 +322,12 @@ class Engine implements Input
         {
             item.draw(this.ctx);
         });
-    };
+    }
 
-    frameFromJson(jsonFrame: string) {
+    frameFromJson(jsonFrame: string) 
+    {
         var frame = JSON.parse(jsonFrame);
         return frame;
-    };
+    }
+
 }
