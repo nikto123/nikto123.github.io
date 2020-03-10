@@ -65,6 +65,7 @@ export abstract class Drawable
 
 export class Frame extends Drawable 
 {
+
     drawObjects : Array<Drawable>;
     clearBeforeDraw : boolean;
     timestamp : string;
@@ -223,11 +224,13 @@ export class Rect
             drawLine(context, points[i], points[next], this.lineWidth, this.color);
         }
     };
-    Rect.prototype.inside = function (pos) {
-        if (pos.x >= this.ul.x && pos.x <= this.dr.x && pos.y >= this.ul.y && pos.y <= this.dr.y) {
+    inside(pos:Vec2) 
+    {
+        if (pos.x >= this.ul.x && pos.x <= this.dr.x && pos.y >= this.ul.y && pos.y <= this.dr.y) 
+        {
             return true;
         }
         return false;
     };
-    return Rect;
+
 }

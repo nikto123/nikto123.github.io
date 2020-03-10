@@ -1,5 +1,5 @@
 
-import { Vec2, drawLine, Frame } from "./graphics";
+import { Vec2, drawLine, Frame, Drawable } from "./graphics";
 import * as foo from "./graphics";
 
 interface Input 
@@ -20,7 +20,7 @@ interface KeyboardInput extends Input{
     getKey(key: number): boolean;
 }
 
-class Mouse implements MouseInput
+export class Mouse implements MouseInput
 {
     handleMouseCallback: (mouse: Mouse, ev : MouseEvent) => void;
 
@@ -122,7 +122,7 @@ class Mouse implements MouseInput
 }
 
 
-class Keyboard implements KeyboardInput
+export class Keyboard implements KeyboardInput
 {   
     handleKbCallback: (keyboard: Keyboard, ev : KeyboardEvent) => void; // sem asi event type a send device (pre nested objekty nech sa vedia pohrabat a ohandlovat si sracky)
 
@@ -259,14 +259,16 @@ export abstract class Temporal
     }
 }
 
-export interface AppObject extends Temporal, InputHandler, MessageHandler
+export interface AppObject extends Temporal, InputHandler, MessageHandler, Drawable
 {
-
+    getFrame():Frame;
 }
 
 
 export class Engine implements AppObject
 {
+
+    type: string;
 
     age: number;
 
@@ -280,6 +282,7 @@ export class Engine implements AppObject
 
     constructor(app: AppObject)
     {
+        
         this.update()
         this.app = app;
     }
@@ -367,10 +370,10 @@ export class Engine implements AppObject
         // frame = this.frameFromJson(jsonFrame);
         //     console.log(jsonFrame);
         
-        var frame = this.app.getFrame();
+        var frame = this.getFrame();
         if (frame.clearBeforeDraw) 
         {
-            drawContext.clearRect(0, 0, SX * lineLength, SY * lineLength);
+            drawContext.clearRect(0, 0, drawContext.canvas.width, drawContext.canvas.height);
         }
 
         frame.drawObjects.forEach(function (item) 
@@ -384,5 +387,8 @@ export class Engine implements AppObject
         var frame = JSON.parse(jsonFrame);
         return frame;
     }
-
+    getFrame(): Frame 
+    {
+        return this.app.getFrame();
+    }
 }
