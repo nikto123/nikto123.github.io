@@ -1,4 +1,3 @@
-
 import { Vec2, drawLine, Frame, Drawable } from "./graphics";
 import * as foo from "./graphics";
 
@@ -7,120 +6,114 @@ interface Input
     setupInput(element : HTMLElement);
 }
 
-interface MouseInput extends Input{
+interface MouseInput extends Input
+{
     onMouseMove(event : MouseEvent);
     onMouseDown(event : MouseEvent);
     onMouseUp(event : MouseEvent);
     onMouseWheel(event : MouseEvent);
 }
 
-interface KeyboardInput extends Input{
+interface KeyboardInput extends Input
+{
     onKeyDown(event: KeyboardEvent);
     onKeyUp(event:KeyboardEvent);
     getKey(key: number): boolean;
 }
 
+enum DragState
+{
+    DOWN_BUT_UNMOVED,
+    DOWN_AND_MOVED, 
+    NOT_DOWN
+}
+
 export class Mouse implements MouseInput
 {
-    handleMouseCallback: (mouse: Mouse, ev : MouseEvent) => void;
+    //handleMouseCallback: (mouse: Mouse, ev : MouseEvent) => void;
+    onMove: (pos:Vec2) => void;
+    onDown: (button:number, mouse:Mouse) => void;
+    onUp: (button:number, mouse:Mouse) => void;
+    onStartDrag: (button: number, mouse:Mouse) => void;
+    onDrag: (button: number, mouse:Mouse) => void;
+    onEndDrag: (button: number, mouse:Mouse) => void;
+    onWheel: (diff: number, mouse:Mouse) => void;
 
     //num_buttons static
+
     bState : boolean[] = [false, false, false];
-    dragState : boolean[] = [false, false, false];
+    dragState : DragState[] = [ DragState.NOT_DOWN, DragState.NOT_DOWN, DragState.NOT_DOWN ];
     num_buttons : number = 3;
 
     pos : Vec2;
+    lastPos: Vec2;
+    dragStart: Vec2;
     diff : Vec2 = new Vec2(0, 0);
     wheelDiff: number;
     wheelPos: number = 0;
 
-    onMouseMove(event : MouseEvent) {
-        this.mouseMove(event.pageX, event.pageY);
-        this.handleMouseCallback(this, event);
-    }
-    onMouseDown(event : MouseEvent) {
-        this.mouseDown(event.button);
-        this.handleMouseCallback(this, event);
-    }
-    onMouseUp(event : MouseEvent) {
-        this.mouseUp(event.button); 
-        this.handleMouseCallback(this, event);
-    }
-    onMouseWheel(event : MouseEvent) {
-        this.mouseWheel(event.offsetX); //offsetY?
-        this.handleMouseCallback(this, event);
-    }
-
-    setupInput(element: HTMLElement) 
+    onMouseMove(event : MouseEvent) 
     {
-        element.addEventListener("mousemove", this.onMouseMove);
-        element.addEventListener("mouseup", this.onMouseUp);
-        element.addEventListener("mousedown", this.onMouseDown);
-        element.addEventListener("mousewheel", this.onMouseWheel);
-    }
-
-    mouseDown(bIndex : number)
-    {
-        this.bState[bIndex] = true;
-
-        //onDownCallback
-    }
-
-    mouseWheel(scrollAmount : number)
-    {
-        this.wheelDiff = scrollAmount;
-        this.wheelPos += this.wheelDiff;
-    }
-
-    mouseUp(bIndex : number)
-    {
-        this.bState[bIndex] = false;
-        if (this.dragState[bIndex] == true)
-        {
-            this.endDrag(bIndex);
-        }
-    }
-
-    mouseDrag(x: number, y:number)
-    {
-    }
-
-    startDrag(bIndex : number)
-    {  
-        this.dragState[bIndex] = true;
-        //mappedCallback()
-    }
-
-    endDrag(bIndex : number)
-    {
-
-        this.dragState[bIndex] = false;
-        //mappedCallback()
-    }
-
-
-    mouseMove(newX: number, newY: number)
-    {
-        
-        this.pos.x = newX;
-        this.pos.y = newY;
-    
+        this.lastPos = this.pos;
+        this.pos = new Vec2(event.x, event.y);
     
         for (var i = 0; this.num_buttons < 3; i++)
         {
             if (this.bState[i] == true)
             {
-                if (this.dragState[i] == false)
+                if (this.dragState[i] == DragState.DOWN_BUT_UNMOVED)//toto tu je kktina 
                 {
                     this.startDrag(i);
                 }
-                this.mouseDrag(this.pos.x, this.pos.y);
+                this.onDrag(i, this);
             }
             
         }
+        this.onMove(this.pos);
+    }
+    onMouseDown(event : MouseEvent) 
+    {
+        this.bState[event.button] = true;
+        this.onDown(event.button, this);
+    }
+    onMouseUp(event : MouseEvent) 
+    {
+        this.bState[event.button] = false;
+        if (this.dragState[event.button] == DragState.DOWN_AND_MOVED)
+        {
+            this.endDrag(event.button);
+        }
+        this.onUp(event.button, this); 
+    }
+
+    onMouseWheel(event: WheelEvent) 
+    {
+        this.wheelDiff = event.deltaY*0.01;
+        this.wheelPos += this.wheelDiff;
+        this.onWheel(this.wheelDiff, this); //offsetY?
+    }
+
+    setupInput(element: HTMLElement) 
+    { 
+        element.onmousemove = this.onMouseMove;
+        element.onmouseup = this.onMouseUp;
+        element.onmousedown = this.onMouseDown;
+        element.onwheel = this.onMouseWheel;
+    }
+
+    startDrag(bIndex : number)
+    {  
+        this.dragState[bIndex] = DragState.DOWN_AND_MOVED;
+        this.dragStart = this.pos;
+        this.onStartDrag(bIndex, this);
+    }
+
+    endDrag(bIndex : number)
+    {
+        this.dragState[bIndex] = DragState.NOT_DOWN;
+        this.onEndDrag(bIndex, this);
     }
 }
-
 
 export class Keyboard implements KeyboardInput
 {   
@@ -149,7 +142,6 @@ export class Keyboard implements KeyboardInput
         return this.keys[key];
     }
 }
-
 
 class DrawClient 
 {
@@ -267,7 +259,6 @@ export interface AppObject extends Temporal, InputHandler, MessageHandler, Drawa
 
 export class Engine implements AppObject
 {
-
     type: string;
 
     age: number;
@@ -289,7 +280,6 @@ export class Engine implements AppObject
 
     connect(serverUrl: string = "ws://localhost:1234")
     {
-        
         this.websockClient = new WebSockClient(serverUrl, this.handleMessage);
         if (this.websockClient.websocket.readyState == WebSocket.OPEN)
         {
@@ -300,7 +290,6 @@ export class Engine implements AppObject
     setupInput(element : HTMLElement)
     {
         this.mouse.setupInput(element);
-        this.mouse.handleMouseCallback = this.handleMouse;
 
         //maybe fix keyboard, input to window
         this.keyboard.setupInput(element);

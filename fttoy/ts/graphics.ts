@@ -233,4 +233,15 @@ export class Rect
         return false;
     };
 
+    getWidth(): number
+    {
+        return Math.abs(this.dr.x - this.ul.x);
+    }    
+    
+    getHeight(): number
+    {
+        return Math.abs(this.dr.y - this.ul.y);
+    }
+
+
 }

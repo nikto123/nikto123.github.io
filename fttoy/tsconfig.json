@@ -6,6 +6,8 @@
 
     },
     "include": [
-        "ts/*.ts"
+        "ts/*.ts",
+        "node_modules/ts-keycode-enum/**/**/*.ts"
+
     ]
   }
