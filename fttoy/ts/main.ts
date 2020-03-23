@@ -9,8 +9,7 @@ import { Engine } from "./engine";
 
 var e: Engine;
 e.setupInput(<HTMLCanvasElement> document.getElementById("c"));
-
-//e.setupDrawing();
+e.app = new WaveSim()
 //e.init();
 
 

@@ -243,7 +243,7 @@ class Wave implements AppObject
 }
 
 
-class WaveSim implements AppObject
+export class WaveSim implements AppObject
 {
     waves: Array<Wave>;
     mainWave: Wave;
@@ -321,16 +321,16 @@ class WaveSim implements AppObject
         this.waves.forEach(function (wave) 
         {
             if (wave.selected == true) {
-                if (this.keys[37]) {
+                if (this.keys[Key.LeftArrow]) {
                     wave.scroll(-1);
                 }
-                if (this.keys[39]) {
+                if (this.keys[Key.RightArrow]) {
                     wave.scroll(1);
                 }
-                if (this.keys[40]) {
+                if (this.keys[Key.UpArrow]) {
                     wave.scaleBy(0.97);
                 }
-                if (this.keys[38]) {
+                if (this.keys[Key.DownArrow]) {
                     wave.scaleBy(1.0 / 0.97);
                 }
             }
@@ -362,14 +362,22 @@ class WaveSim implements AppObject
     {
         let obj = this;
 
+        this.kb.onDown = function(key: number, keyboard:Keyboard) {
+
+        }
+
+        this.kb.onUp = function(key: number, keyboard:Keyboard) {
+
+        }
+
         this.mouse.onDown = function(button: number, mouse:Mouse) {
-            obj.waves.forEach(function (w) {
-                if (w.rect.inside(mouse.pos)) 
-                {
-                    
-                    if (w.selected == false)
-                    {
-                        //
+            this.waves.forEach(function (w) {
+                if (w.rect.inside(mouse.pos) && w.selected == true) {
+                    var index = w.posToIndex(mouse.pos);
+                    if (index != -1) {
+                        var val = w.posToValue(mouse.pos);
+                        w.values[index] = -val;
+                        w.changed = true;
                     }
                 }
             });
@@ -465,204 +473,4 @@ class WaveSim implements AppObject
 
  
 
-}
-
-var WaveSinn = /** @class */ (function () {
-    function WaveSim() {
-        var width = w / 3.0 * 2.0;
-        var height = h / 4.0;
-        var top = 1.0;
-        var floor = -1.0;
-        var resolution = 350;
-        this.wave = new Wave(resolution, w / 6.0, height * 2.0 / 3.0, width, height, top, floor);
-        this.wave.genRandom();
-        var wave = this.wave;
-        var transscale = 0.250;
-        this.sinwaves = new Wave(wave.resolution / 2, wave.pos.x, wave.pos.y + height * 1.25, width, height, top * transscale, floor * transscale, wave.left, wave.right);
-        this.coswaves = new Wave(wave.resolution / 2, wave.pos.x, wave.pos.y + height * 2.5, width, height, top * transscale, floor * transscale, wave.left, wave.right);
-        this.sinwaves.setDrawMode(1);
-        this.coswaves.setDrawMode(1);
-        //  this.inverse= new Wave(wave.resolution, wave.pos.x, wave.pos.y+height * 3.25, width, height, top, floor, wave.left, wave.right);
-        this.waves = [this.sinwaves, this.coswaves, this.wave /*, this.inverse*/];
-        this.transform(this.sinwaves, this.coswaves);
-        this.keys = new Array();
-        this.keys[37] = false;
-        this.keys[38] = false;
-        this.keys[39] = false;
-        this.keys[40] = false;
-        this.ctrlClicks = false;
-    }
-    WaveSim.prototype.onKeyDown = function (key) {
-        this.keys[key] = true;
-    };
-    WaveSim.prototype.onKeyUp = function (key) {
-        this.keys[key] = false;
-    };
-
-    WaveSim.prototype.update = function () {
-        //  this.wave.scroll(1);
-        var _this = this;
-        // this.transform();
-        if (this.keys[17]) {
-            this.ctrlClicks = true;
-        }
-        else {
-            this.ctrlClicks = false;
-        }
-        this.waves.forEach(function (wave) {
-            if (wave.selected == true) {
-                if (_this.keys[37]) {
-                    wave.scroll(-1);
-                }
-                if (_this.keys[39]) {
-                    wave.scroll(1);
-                }
-                if (_this.keys[40]) {
-                    wave.scale(0.97);
-                }
-                if (_this.keys[38]) {
-                    wave.scale(1.0 / 0.97);
-                }
-            }
-        });
-        if (this.wave.changed) {
-            this.wave.changed = false;
-            this.wave.getTransform(this.sinwaves, this.coswaves);
-        }
-        else if (this.sinwaves.changed || this.coswaves.changed) {
-            this.sinwaves.changed = this.coswaves.changed = false;
-            this.wave.inverseTransform(this.sinwaves, this.coswaves);
-        }
-    };
-
-    WaveSim.prototype.mouseMove = function (pos, button) {
-        if (mb1Down == true) {
-            this.waves.forEach(function (w) {
-                var changed = false;
-                if (w.rect.inside(pos) && w.selected == true) {
-                    var index = w.posToIndex(pos);
-                    if (index != -1) {
-                        var val = w.posToValue(pos);
-                        w.values[index] = -val;
-                        w.changed = true;
-                    }
-                }
-            });
-        }
-    };
-
-    WaveSim.prototype.mouseDown = function (pos, button) {
-        this.waves.forEach(function (w) {
-            if (w.rect.inside(pos) && w.selected == true) {
-                var index = w.posToIndex(pos);
-                if (index != -1) {
-                    var val = w.posToValue(pos);
-                    w.values[index] = -val;
-                    w.changed = true;
-                }
-            }
-        });
-    };
-
-    WaveSim.prototype.mouseUp = function (pos, button) {
-        var _this = this;
-        this.waves.forEach(function (w) {
-            if (w.rect.inside(pos)) {
-                if (_this.ctrlClicks) {
-                    if (w.selected == false) {
-                        _this.select(w);
-                    }
-                    else {
-                        _this.deselect(w);
-                    }
-                }
-                else if (w.selected == false) {
-                    _this.select(w);
-                }
-                else {
-                    var index = w.posToIndex(pos);
-                    if (index != -1) {
-                        w.values[index] = -w.posToValue(pos);
-                        w.changed = true;
-                    }
-                }
-            }
-            else {
-                if (w.selected == true && _this.ctrlClicks == false) {
-                    _this.deselect(w);
-                }
-            }
-        });
-    };
-    WaveSim.prototype.deselect = function (wave) {
-        wave.select(false);
-    };
-    WaveSim.prototype.select = function (wave) {
-        wave.select(true);
-    };
-    return WaveSim;
-}());
-
-
-
-
-
-
-var drawServer;
-function init() {
-    drawServer = new DrawServer();
-    drawServer.lastFrame = new Frame([getRandomPolyline(), getRandomPolyline()], 1);
-}
-var wavesim = new WaveSim();
-function updateAndDraw() {
-    wavesim.update();
-    drawServer.draw(new Frame([wavesim], 1));
-    //new Test().run();
-}
-function onMouseMove(event) {
-    wavesim.mouseMove(new Point(event.clientX, event.clientY));
-    //   var m = new Point(event.clientX, event.clientY);
-    //    applyForces(m);
-}
-function onMouseDown(event) {
-    mb1Down = true;
-    wavesim.mouseDown(new Point(event.clientX, event.clientY));
-}
-function onMouseUp(event) {
-    wavesim.mouseUp(new Point(event.clientX, event.clientY));
-    mb1Down = false;
-    var m = new Point(event.clientX, event.clientY);
-    var mp = new Point((event.clientX), (event.clientY));
-    worldPt = getWorldPoint(mp.x, mp.y, scale.x, scale.y, d.x, d.y);
-    var sp = getScreenPoint(worldPt.x, worldPt.y, scale.x, scale.y, d.x, d.y);
-    d.x -= scale.x * (m.x - w / 2.0);
-    d.y -= scale.y * (m.y - h / 2.0);
-    drawText("mouse:" + mp.x + " " + mp.y, m.x, m.y, 0);
-    drawText("world:" + worldPt.x + " " + worldPt.y, m.x, m.y, 1);
-    drawText("diff:" + d.x + " " + d.y, m.x, m.y, 2);
-    drawText("scale:" + scale.x + " " + scale.y, m.x, m.y, 3);
-    drawText("screen:" + sp.x + " " + sp.y, m.x, m.y, 4);
-}
-function onWheel(event) {
-    var mp = new Point(event.clientX - w / 2.0, event.clientY - h / 2.0);
-    var MULT = 1.074;
-    if (event.deltaY < 0) {
-        scale.x *= MULT;
-        scale.y *= MULT;
-    }
-    else {
-        scale.x /= MULT;
-        scale.y /= MULT;
-    }
-    // draw();
-}
-
-
-//where world is drawn as:
-//  
-function getWorldPoint(mx, my, sx, sy, dx, dy) {
-    return new Point((mx + dx) * sx, (my + dy) * sy);
-}
-function getScreenPoint(wpx, wpy, sx, sy, dx, dy) {
-    return new Point((wpx + dx) / sx + w / 2.0, (wpy + dy) / sy + h / 2.0);
 }

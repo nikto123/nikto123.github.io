@@ -3,7 +3,7 @@ import * as foo from "./graphics";
 
 interface Input 
 {
-    setupInput(element : HTMLElement);
+    setupInput(element : HTMLElement, ih:InputHandler);
 }
 
 interface MouseInput extends Input
@@ -38,7 +38,7 @@ export class Mouse implements MouseInput
     onDrag: (button: number, mouse:Mouse) => void;
     onEndDrag: (button: number, mouse:Mouse) => void;
     onWheel: (diff: number, mouse:Mouse) => void;
-
+    inputHandler:InputHandler;
     //num_buttons static
 
     bState : boolean[] = [false, false, false];
@@ -70,11 +70,13 @@ export class Mouse implements MouseInput
             
         }
         this.onMove(this.pos);
+        this.inputHandler.handleMouse(this, event);
     }
     onMouseDown(event : MouseEvent) 
     {
         this.bState[event.button] = true;
         this.onDown(event.button, this);
+        this.inputHandler.handleMouse(this, event);
     }
     onMouseUp(event : MouseEvent) 
     {
@@ -84,6 +86,7 @@ export class Mouse implements MouseInput
             this.endDrag(event.button);
         }
         this.onUp(event.button, this); 
+        this.inputHandler.handleMouse(this, event);
     }
 
     onMouseWheel(event: WheelEvent) 
@@ -91,14 +94,16 @@ export class Mouse implements MouseInput
         this.wheelDiff = event.deltaY*0.01;
         this.wheelPos += this.wheelDiff;
         this.onWheel(this.wheelDiff, this); //offsetY?
+        this.inputHandler.handleMouse(this, event);
     }
 
-    setupInput(element: HTMLElement) 
+    setupInput(element: HTMLElement, ih: InputHandler) 
     { 
         element.onmousemove = this.onMouseMove;
         element.onmouseup = this.onMouseUp;
         element.onmousedown = this.onMouseDown;
         element.onwheel = this.onMouseWheel;
+        this.inputHandler = ih;
     }
 
     startDrag(bIndex : number)
@@ -117,9 +122,10 @@ export class Mouse implements MouseInput
 
 export class Keyboard implements KeyboardInput
 {   
-    handleKbCallback: (keyboard: Keyboard, ev : KeyboardEvent) => void; // sem asi event type a send device (pre nested objekty nech sa vedia pohrabat a ohandlovat si sracky)
-
-    setupInput(element: HTMLElement) 
+    onDown: (key: number, keyboard: Keyboard) => void; // sem asi event type a send device (pre nested objekty nech sa vedia pohrabat a ohandlovat si sracky)
+    onUp: (key: number, keyboard: Keyboard) => void; // sem asi event type a send device (pre nested objekty nech sa vedia pohrabat a ohandlovat si sracky)
+    inputHandler:InputHandler;
+    setupInput(element: HTMLElement, ih:InputHandler) 
     {
         element.addEventListener("keydown", this.onKeyDown);
         element.addEventListener("keyup", this.onKeyUp);    
@@ -128,13 +134,15 @@ export class Keyboard implements KeyboardInput
     onKeyDown(event: KeyboardEvent)
     {
         this.keys[event.keyCode] = true;
-        this.handleKbCallback(this, event);
+        this.onDown(event.keyCode, this);
+        this.inputHandler.handleKeyboard(this, event);
     }
 
     onKeyUp(event:KeyboardEvent)
     {
         this.keys[event.keyCode] = false;
-        this.handleKbCallback(this, event);
+        this.onUp(event.keyCode, this);
+        this.inputHandler.handleKeyboard(this, event);
     }
 
     getKey(key: number) : boolean
@@ -225,6 +233,7 @@ interface MessageHandler
     handleMessage(msg: any);
 }
 
+
 export interface InputHandler extends Input
 {
     handleMouse(mouse: Mouse, ev: MouseEvent);
@@ -251,7 +260,7 @@ export abstract class Temporal
     }
 }
 
-export interface AppObject extends Temporal, InputHandler, MessageHandler, Drawable
+export abstract interface AppObject extends Temporal implements InputHandler, MessageHandler, Drawable
 {
     getFrame():Frame;
 }
@@ -267,14 +276,10 @@ export class Engine implements AppObject
     keyboard: Keyboard;
     websockClient: WebSockClient;
     app: AppObject;
-     
     drawFrame : Frame;
-
 
     constructor(app: AppObject)
     {
-        
-        this.update()
         this.app = app;
     }
 
@@ -287,14 +292,14 @@ export class Engine implements AppObject
         }
     }
 
-    setupInput(element : HTMLElement)
+    setupInput(element: HTMLElement)
     {
-        this.mouse.setupInput(element);
-
+        this.mouse.setupInput(element, this);
         //maybe fix keyboard, input to window
-        this.keyboard.setupInput(element);
-        this.keyboard.handleKbCallback = this.handleKeyboard;
-    }   
+        this.keyboard.setupInput(element, this);
+        //this.keyboard. = this.handleKeyboard;
+    }  
+
     setupDrawing(canvas: HTMLElement)
     {
         
@@ -303,11 +308,10 @@ export class Engine implements AppObject
     
     handleKeyboard(keyboard: Keyboard, event:KeyboardEvent)
     {
-        this.app.handleKeyboard(keyboard, event);
+      //  this.app.handleKeyboard(keyboard, event);
         if (this.websockClient.isConnected())
         {     
             var msg: any = {};
-
             msg.type = event.type;
             msg.keyCode = event.keyCode;
             this.websockClient.sendMessage(JSON.stringify(msg));
@@ -316,7 +320,7 @@ export class Engine implements AppObject
 
     handleMouse(mouse: Mouse, event: MouseEvent)
     { 
-        this.app.handleMouse(mouse, event);
+       // this.app.handleMouse(mouse, event);
         if (this.websockClient.isConnected())
         {   
             var msg: any = {};
@@ -328,16 +332,12 @@ export class Engine implements AppObject
             this.websockClient.sendMessage(JSON.stringify(msg));
         }
     }
-        
+
     update(timeSinceLast:number=1)
     {
-        this.app.update(1);
+        this.app.update(timeSinceLast);
     }
 
-    doUpdate(time: number) 
-    {
-
-    }
 
     handleMessage(event: any)
     {
