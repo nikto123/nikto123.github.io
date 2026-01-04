@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aba.kc remake — WebGPU</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; }
+    canvas { width: 100vw; height: 100vh; display: block; touch-action: none; }
+    #hud{
+      position: fixed; left: 12px; top: 12px;
+      color:#ddd; font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: rgba(0,0,0,0.45); padding: 10px 12px; border-radius: 10px;
+      user-select: none;
+    }
+    #hud .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; align-items:center; }
+    #hud button, #hud input { background:#1b1b1b; color:#ddd; border:1px solid #333; border-radius:8px; padding:6px 10px; }
+    #hud input[type="range"] { padding: 0; height: 20px; }
+    #hud input[type="number"] { width: 90px; }
+    #hud button { cursor:pointer; }
+    #hud button:hover { border-color:#555; }
+    #hud .kv { opacity:0.9; }
+    #hud .warn { color:#ffcc66; }
+  
+  #mobileControls { gap: 8px; align-items: center; }
+  #mobileControls .seg { display: inline-flex; gap: 6px; }
+  .modeBtn, .toggleBtn { padding: 10px 12px; font-weight: 700; }
+  .modeBtn.active, .toggleBtn.active { outline: 2px solid #fff; }
+  .mobileHint { opacity: 0.85; }
+  .mobile { display: none; }
+  @media (max-width: 900px), (pointer: coarse) {
+    .mobile { display: flex; }
+    #hud { font-size: 12px; }
+    #hud input[type="range"] { width: 120px; }
+  }
+
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="kv">
+    LMB paint • Ctrl+LMB invert • RMB damp • MMB multiply (hold=more) • Wheel brush • Space pause (paint still) • Shift+click line
+  </div>
+  <div class="row">
+    <button id="reset">Reset field</button>
+    <button id="apply">Apply size</button>
+    <span class="kv" id="stat"></span>
+  </div>
+
+  <div id="mobileControls" class="row mobile">
+    <div class="seg">
+      <button id="modeAdd" class="modeBtn">+</button>
+      <button id="modeSub" class="modeBtn">−</button>
+      <button id="modeMul" class="modeBtn">×</button>
+    </div>
+    <button id="invertTouch" class="toggleBtn">Inv</button>
+    <button id="pauseTouch" class="toggleBtn">Pause</button>
+    <span class="kv mobileHint" id="touchHint"></span>
+  </div>
+
+  <div class="row">
+    <label class="kv">Grid <input id="gridN" type="number" min="16" step="1" value="120" /></label>
+    <label class="kv">Pixel scale <input id="ps" type="number" min="1" step="1" value="2" /></label>
+    <span class="kv warn" id="hint"></span>
+  </div>
+  <div class="row">
+    <label class="kv">Impulse <input id="imp" type="range" min="1" max="200" value="40" /></label>
+    <label class="kv">Brush sharp <input id="sharp" type="range" min="1" max="24" value="6" /></label>
+    <label class="kv">Diffusion <input id="dif" type="range" min="1" max="350" value="65" /></label>
+    <label class="kv">DampV <input id="damv" type="range" min="900" max="999" value="992" /></label>
+    <label class="kv">DampD <input id="damd" type="range" min="700" max="999" value="840" /></label>
+    <label class="kv">Anti <input id="anti" type="range" min="1001" max="1200" value="1020" /></label>
+  </div>
+</div>
+
+<script type="module">
+const canvas = document.getElementById("c");
+const stat = document.getElementById("stat");
+const hint = document.getElementById("hint");
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+let needReconfigure = true;
+function resizeCanvasToDisplaySize(c) {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = Math.floor(c.clientWidth * dpr);
+  const h = Math.floor(c.clientHeight * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; return true; }
+  return false;
+}
+
+if (!navigator.gpu) throw new Error("WebGPU unavailable");
+const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+if (!adapter) throw new Error("No GPU adapter");
+const device = await adapter.requestDevice();
+
+device.addEventListener("uncapturederror", (ev) => {
+  console.error("WebGPU uncaptured error:", ev.error);
+});
+device.lost.then((info) => {
+  console.error("WebGPU device lost:", info);
+});
+
+const ctx = canvas.getContext("webgpu");
+const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+
+function configureIfNeeded() {
+  const changed = resizeCanvasToDisplaySize(canvas);
+  if (changed) needReconfigure = true;
+  if (!needReconfigure) return;
+  ctx.configure({ device, format: presentationFormat, alphaMode: "opaque" });
+  needReconfigure = false;
+  updateHint();
+}
+window.addEventListener("resize", () => { needReconfigure = true; });
+
+// ---- textures (stand-ins for p1/p2) ----
+function makePatternTexture(kind) {
+  const W = 256, H = 256;
+  const data = new Uint8Array(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    const u = x / (W - 1);
+    const v = y / (H - 1);
+    let r,g,b;
+    if (kind === 0) {
+      const a = 0.5 + 0.5 * Math.sin(20*u) * Math.sin(20*v);
+      const c = 0.5 + 0.5 * Math.cos(6*u + 4*v);
+      r = 0.25 + 0.75 * a; g = 0.15 + 0.55 * c; b = 0.10 + 0.40 * (1.0 - a);
+    } else {
+      const dx = u - 0.5, dy = v - 0.5;
+      const rr = Math.sqrt(dx*dx + dy*dy);
+      const rings = 0.5 + 0.5 * Math.cos(40.0 * rr);
+      const stripes = 0.5 + 0.5 * Math.sin(26.0 * u);
+      r = 0.10 + 0.35 * stripes; g = 0.25 + 0.55 * rings; b = 0.35 + 0.65 * (1.0 - stripes*0.6);
+    }
+    data[i+0] = Math.round(clamp(r,0,1)*255);
+    data[i+1] = Math.round(clamp(g,0,1)*255);
+    data[i+2] = Math.round(clamp(b,0,1)*255);
+    data[i+3] = 255;
+  }
+  const tex = device.createTexture({
+    size: [W,H,1],
+    format: "rgba8unorm",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: W*4 }, { width: W, height: H });
+  return tex;
+}
+const texA = makePatternTexture(0);
+const texB = makePatternTexture(1);
+const samp = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" });
+
+// ---- WGSL ----
+const computeWGSL = /* wgsl */`
+struct Params {
+  xs : u32,
+  ys : u32,
+  dt : f32,
+  k  : f32,
+  dampingV : f32,
+  dampingD : f32,
+  anti : f32,
+  paused : u32,
+
+  ax : f32,
+  ay : f32,
+  bx : f32,
+  by : f32,
+  radius : f32,
+  impulseV : f32,
+  sharpness : f32,
+  paintOn : u32,
+  mode : u32,
+  mHold : f32,
+};
+
+@group(0) @binding(0) var<storage, read_write> v : array<f32>;
+@group(0) @binding(1) var<storage, read_write> d : array<f32>;
+@group(0) @binding(2) var<uniform> P : Params;
+
+fn idx(x: i32, y: i32) -> u32 {
+  let xs = i32(P.xs);
+  let ys = i32(P.ys);
+  var xx = x % xs;
+  var yy = y % ys;
+  if (xx < 0) { xx += xs; }
+  if (yy < 0) { yy += ys; }
+  return u32(yy * xs + xx);
+}
+
+fn dist_to_segment(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
+  let vx = bx - ax;
+  let vy = by - ay;
+  let wx = px - ax;
+  let wy = py - ay;
+  let vv = vx*vx + vy*vy;
+  if (vv <= 1e-6) {
+    let dx = px - ax;
+    let dy = py - ay;
+    return sqrt(dx*dx + dy*dy);
+  }
+  let t = clamp((wx*vx + wy*vy) / vv, 0.0, 1.0);
+  let cx = ax + t*vx;
+  let cy = ay + t*vy;
+  let dx = px - cx;
+  let dy = py - cy;
+  return sqrt(dx*dx + dy*dy);
+}
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let x = i32(gid.x);
+  let y = i32(gid.y);
+  if (x >= i32(P.xs) || y >= i32(P.ys)) { return; }
+  let id = idx(x,y);
+
+  if (P.paintOn == 1u) {
+    let px = f32(x) + 0.5;
+    let py = f32(y) + 0.5;
+    let dist = dist_to_segment(px, py, P.ax, P.ay, P.bx, P.by);
+    if (dist <= P.radius) {
+      let r = max(P.radius, 1e-3);
+      let t = clamp(1.0 - dist / r, 0.0, 1.0);
+      // sharpness: 1=soft, higher=sharper + deeper center
+      let w = pow(t, P.sharpness);
+      v[id] = v[id] + P.impulseV * w;
+      d[id] = d[id] * (1.0 - w);
+    }
+  }
+
+  if (P.paused == 1u) { return; }
+
+  v[id] = v[id] + d[id] * P.dt;
+
+  let center = v[id];
+  let invSqrt2 = 0.70710678;
+  var acc : f32 = 0.0;
+
+  for (var j = -1; j <= 1; j = j + 1) {
+    for (var i = -1; i <= 1; i = i + 1) {
+      if (i == 0 && j == 0) { continue; }
+      let nb = v[idx(x+i, y+j)];
+      let f = select(1.0, invSqrt2, (i != 0 && j != 0));
+      acc = acc + (nb - center) * f;
+    }
+  }
+  d[id] = d[id] + acc * P.k;
+
+  if (P.mode == 1u) {
+    v[id] = v[id] * P.dampingV;
+    d[id] = d[id] * P.dampingD;
+  } else if (P.mode == 2u) {
+    // MMB multiply values; holding increases the multiplier
+    let antiEff = clamp(1.0 + (P.anti - 1.0) * (1.0 + P.mHold * 5.0), 1.0, 5.0);
+    v[id] = v[id] * antiEff;
+    d[id] = d[id] * antiEff;
+  } else {
+    v[id] = v[id] * 0.9995;
+    d[id] = d[id] * 0.9995;
+  }
+
+  // hard clamp to avoid NaNs/Inf -> device loss on some drivers
+  let VMAX = 120.0;
+  let DMAX = 120.0;
+  v[id] = clamp(v[id], -VMAX, VMAX);
+  d[id] = clamp(d[id], -DMAX, DMAX);
+}
+`;
+
+const renderWGSL = /* wgsl */`
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, };
+
+struct RParams {
+  xs : u32,
+  ys : u32,
+  pixelScale : u32,
+  pad0 : u32,
+  gain : f32,
+  screenAspect : f32, // canvas.width / canvas.height
+  pad2 : f32,
+  pad3 : f32,
+};
+
+@group(0) @binding(0) var<storage, read> v : array<f32>;
+@group(0) @binding(1) var texA : texture_2d<f32>;
+@group(0) @binding(2) var texB : texture_2d<f32>;
+@group(0) @binding(3) var samp : sampler;
+@group(0) @binding(4) var<uniform> RP : RParams;
+
+fn vidx(x: u32, y: u32) -> u32 { return y * RP.xs + x; }
+
+fn rgb_r_g_b(t: f32) -> vec3<f32> {
+  let tt = clamp(t, 0.0, 1.0);
+  if (tt < 0.5) {
+    let a = tt * 2.0;
+    return mix(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), a);
+  } else {
+    let a = (tt - 0.5) * 2.0;
+    return mix(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), a);
+  }
+}
+
+@vertex
+fn vs(@builtin(vertex_index) vi: u32) -> VSOut {
+  var p = array<vec2<f32>, 6>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>( 1.0, -1.0), vec2<f32>(-1.0,  1.0),
+    vec2<f32>(-1.0,  1.0), vec2<f32>( 1.0, -1.0), vec2<f32>( 1.0,  1.0),
+  );
+  var o: VSOut;
+  o.pos = vec4<f32>(p[vi], 0.0, 1.0);
+  o.uv  = p[vi] * 0.5 + vec2<f32>(0.5);
+  return o;
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  let aspect = RP.screenAspect;
+
+  // centered square that fits screen => pixels are square (1:1)
+  var su = in.uv.x;
+  var sv = in.uv.y;
+
+  if (aspect > 1.0) {
+    let scale = 1.0 / aspect;
+    su = (su - 0.5) / scale + 0.5;
+  } else {
+    let scale = aspect;
+    sv = (sv - 0.5) / scale + 0.5;
+  }
+
+  let inside =
+    step(0.0, su) * step(su, 1.0) *
+    step(0.0, sv) * step(sv, 1.0);
+
+  su = clamp(su, 0.0, 1.0);
+  sv = clamp(sv, 0.0, 1.0);
+
+  let sx = f32(RP.xs);
+  let sy = f32(RP.ys);
+  let ps = max(1.0, f32(RP.pixelScale));
+  let vx = sx * ps;
+  let vy = sy * ps;
+
+  let px = clamp(floor(su * vx), 0.0, vx - 1.0);
+  let py = clamp(floor(sv * vy), 0.0, vy - 1.0);
+
+  let cx = u32(floor(px / ps));
+  let cy = u32(floor(py / ps));
+
+  let vv = v[vidx(cx,cy)];
+
+  let sgnMap = 0.5 + 0.5 * (vv / (1.0 + abs(vv)));
+  let hue = rgb_r_g_b(sgnMap);
+
+  let inten = clamp(abs(vv) * RP.gain, 0.0, 1.0);
+
+  let tu = vec2<f32>(f32(cx)/sx, f32(cy)/sy) * vec2<f32>(3.0, 3.0);
+  let ta = textureSample(texA, samp, tu).rgb;
+  let tb = textureSample(texB, samp, tu).rgb;
+  let base = select(ta, tb, vv > 0.0);
+  let lum = dot(base, vec3<f32>(0.2126, 0.7152, 0.0722));
+
+  let col = hue * (0.15 + 0.85 * lum) * inten * inside;
+  return vec4<f32>(col, 1.0);
+}
+`;
+
+const computeModule = device.createShaderModule({ code: computeWGSL });
+const renderModule  = device.createShaderModule({ code: renderWGSL });
+
+const computePipeline = device.createComputePipeline({ layout: "auto", compute: { module: computeModule, entryPoint: "main" } });
+const renderPipeline = device.createRenderPipeline({
+  layout: "auto",
+  vertex: { module: renderModule, entryPoint: "vs" },
+  fragment: { module: renderModule, entryPoint: "fs", targets: [{ format: presentationFormat }] },
+  primitive: { topology: "triangle-list" },
+});
+
+// ---- sim resources ----
+let XS = 120, YS = 120, PS = 2, N = XS * YS;
+let vBuf, dBuf, paramsBuf, rParamsBuf, computeBindGroup, renderBindGroup;
+
+function allocForSize() {
+  N = XS * YS;
+  vBuf = device.createBuffer({ size: N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  dBuf = device.createBuffer({ size: N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  paramsBuf = device.createBuffer({ size: 4 * 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  rParamsBuf = device.createBuffer({ size: 4 * 8, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+  computeBindGroup = device.createBindGroup({
+    layout: computePipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: vBuf } },
+      { binding: 1, resource: { buffer: dBuf } },
+      { binding: 2, resource: { buffer: paramsBuf } },
+    ],
+  });
+
+  renderBindGroup = device.createBindGroup({
+    layout: renderPipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: vBuf } },
+      { binding: 1, resource: texA.createView() },
+      { binding: 2, resource: texB.createView() },
+      { binding: 3, resource: samp },
+      { binding: 4, resource: { buffer: rParamsBuf } },
+    ],
+  });
+}
+
+function initField() {
+  const v0 = new Float32Array(N);
+  const d0 = new Float32Array(N);
+  for (let y = 0; y < YS; y++) for (let x = 0; x < XS; x++) {
+    const u = x / (XS - 1);
+    const w = y / (YS - 1);
+    const r = 0.5 + 0.5 * Math.sin(10.0 * u + 6.0 * w);
+    const g = 0.5 + 0.5 * Math.cos(9.0 * u - 7.0 * w);
+    v0[y * XS + x] = (r - g) * 0.35;
+  }
+  device.queue.writeBuffer(vBuf, 0, v0);
+  device.queue.writeBuffer(dBuf, 0, d0);
+}
+
+allocForSize();
+initField();
+
+// ---- input / painting ----
+let paused = false;
+let downL = false, downR = false, downM = false;
+
+
+let uiMode = 0; // 0 add, 1 subtract, 2 multiply
+let invertTouchHeld = false;
+
+const touchPtrs = new Map(); // pointerId -> {x,y}
+
+function updateModeButtons() {
+  const a = document.getElementById("modeAdd");
+  const s = document.getElementById("modeSub");
+  const m = document.getElementById("modeMul");
+  if (!a) return;
+  a.classList.toggle("active", uiMode === 0);
+  s.classList.toggle("active", uiMode === 1);
+  m.classList.toggle("active", uiMode === 2);
+}
+
+function setUIMode(v) { uiMode = v; updateModeButtons(); }
+
+function touchModeFromCount(n) {
+  if (n >= 3) return 2;
+  if (n === 2) return 1;
+  return uiMode;
+}
+
+let mHoldStart = -1;
+let shiftHeld = false;
+let ctrlHeld = false;
+let brush = 2;
+
+let mx01 = 0.5, my01 = 0.5;
+let prevPaintValid = false;
+let prevCellX = 0, prevCellY = 0;
+let anchorValid = false;
+let anchorX = 0, anchorY = 0;
+
+function squareRegionFromRect(r) {
+  const aspect = r.width / r.height;
+  if (aspect > 1) {
+    const sw = 1 / aspect, sh = 1;
+    return { sx0: (1 - sw) * 0.5, sy0: 0, sw, sh };
+  } else {
+    const sw = 1, sh = aspect;
+    return { sx0: 0, sy0: (1 - sh) * 0.5, sw, sh };
+  }
+}
+
+function updateMouseFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  const nx = clamp((e.clientX - r.left) / r.width, 0, 1);
+  const ny = clamp((e.clientY - r.top) / r.height, 0, 1);
+  const sq = squareRegionFromRect(r);
+  const ux = clamp((nx - sq.sx0) / sq.sw, 0, 1);
+  const uy = clamp((ny - sq.sy0) / sq.sh, 0, 1);
+  mx01 = ux;
+  my01 = 1 - uy;
+}
+
+function mouseToCell() {
+  const cx = clamp(Math.floor(mx01 * XS), 0, XS - 1);
+  const cy = clamp(Math.floor(my01 * YS), 0, YS - 1);
+  return { cx, cy };
+}
+
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  updateMouseFromEvent(e);
+
+
+  if (e.pointerType === "touch") {
+    touchPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    downL = true;
+    if (touchHintEl) {
+      const n = touchPtrs.size;
+      touchHintEl.textContent = (n===2) ? "2-finger: −" : (n>=3 ? "3-finger: ×" : "1-finger");
+    }
+  }
+  if (e.pointerType !== "touch") {
+    if (e.button === 0) downL = true;
+    if (e.button === 2) downR = true;
+    if (e.button === 1) { downM = true; mHoldStart = performance.now(); }
+  }
+
+  const { cx, cy } = mouseToCell();
+  prevPaintValid = true;
+  prevCellX = cx; prevCellY = cy;
+
+  if (e.button === 0 && shiftHeld) {
+    if (!anchorValid) { anchorValid = true; anchorX = cx; anchorY = cy; }
+    else { anchorX = cx; anchorY = cy; }
+  }
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  if (e.pointerType === "touch") {
+    touchPtrs.delete(e.pointerId);
+    downL = touchPtrs.size > 0;
+    if (!downL) prevPaintValid = false;
+    if (touchHintEl) touchHintEl.textContent = downL ? ((touchPtrs.size===2) ? "2-finger: −" : (touchPtrs.size>=3 ? "3-finger: ×" : "1-finger")) : "";
+    return;
+  }
+  if (e.button === 0) downL = false;
+  if (e.button === 2) downR = false;
+  if (e.button === 1) { downM = false; mHoldStart = -1; }
+  if (e.button === 0) prevPaintValid = false;
+});
+
+canvas.addEventListener("pointercancel", (e) => {
+  if (e.pointerType === "touch") {
+    touchPtrs.delete(e.pointerId);
+    downL = touchPtrs.size > 0;
+    if (!downL) prevPaintValid = false;
+    if (touchHintEl) touchHintEl.textContent = downL ? ((touchPtrs.size===2) ? "2-finger: −" : (touchPtrs.size>=3 ? "3-finger: ×" : "1-finger")) : "";
+  }
+});
+
+canvas.addEventListener("pointermove", (e) => updateMouseFromEvent(e));
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Shift") shiftHeld = true;
+  if (e.key === "Control") ctrlHeld = true;
+  if (e.code === "Space") { paused = !paused; e.preventDefault(); }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Shift") shiftHeld = false;
+  if (e.key === "Control") ctrlHeld = false;
+});
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  brush = clamp(brush + Math.sign(e.deltaY), 1, 128);
+}, { passive: false });
+
+// ---- UI ----
+document.getElementById("reset").addEventListener("click", () => {
+  initField();
+  anchorValid = false;
+  prevPaintValid = false;
+});
+
+document.getElementById("apply").addEventListener("click", () => {
+  configureIfNeeded();
+  const gridN = Math.floor(Number(document.getElementById("gridN").value));
+  const psN   = Math.max(1, Math.floor(Number(document.getElementById("ps").value)));
+  const maxN = Math.max(16, Math.floor(Math.min(canvas.width, canvas.height) / psN));
+  XS = clamp(gridN, 16, maxN);
+  YS = XS;
+  PS = psN;
+  allocForSize();
+  initField();
+  anchorValid = false;
+  prevPaintValid = false;
+  updateHint();
+});
+
+function updateHint() {
+  const psN = Math.max(1, Math.floor(Number(document.getElementById("ps").value)));
+  const maxN = Math.max(16, Math.floor(Math.min(canvas.width, canvas.height) / psN));
+  hint.textContent = `max grid ≈ ${maxN} for ps=${psN} (canvas backing res)`;
+}
+document.getElementById("ps").addEventListener("change", updateHint);
+
+// sliders
+const impEl  = document.getElementById("imp");
+const sharpEl = document.getElementById("sharp");
+const difEl  = document.getElementById("dif");
+const damvEl = document.getElementById("damv");
+const damdEl = document.getElementById("damd");
+const antiEl = document.getElementById("anti");
+
+// ---- uniforms ----
+function writeParams() {
+  const { cx, cy } = mouseToCell();
+
+  // default is negative impulse; Ctrl inverts sign
+  let impulse = -Number(impEl.value);
+  if (ctrlHeld || invertTouchHeld) impulse = -impulse;
+
+  const sharpness = Number(sharpEl.value); // exponent
+  const k = Number(difEl.value) / 10000;
+  const dampV = Number(damvEl.value) / 1000;
+  const dampD = Number(damdEl.value) / 1000;
+  const anti  = Number(antiEl.value) / 1000;
+
+  let mode = 0;
+  // Desktop buttons
+  if (downR) mode = 1;
+  else if (downM) mode = 2;
+
+  // Mobile: 2-finger forces subtract, 3-finger forces multiply, otherwise UI mode
+  if (touchPtrs.size > 0) mode = touchModeFromCount(touchPtrs.size);
+  else mode = (downR ? 1 : (downM ? 2 : uiMode));
+
+  let paintOn = downL ? 1 : 0;
+
+  let ax = cx + 0.5, ay = cy + 0.5;
+  let bx = cx + 0.5, by = cy + 0.5;
+
+  if (downL && prevPaintValid) {
+    ax = prevCellX + 0.5; ay = prevCellY + 0.5;
+    bx = cx + 0.5;        by = cy + 0.5;
+    prevCellX = cx; prevCellY = cy;
+  }
+
+  if (downL && shiftHeld && anchorValid) {
+    ax = anchorX + 0.5; ay = anchorY + 0.5;
+    bx = cx + 0.5;      by = cy + 0.5;
+  }
+
+  const buf = new ArrayBuffer(4 * 32);
+  const dv = new DataView(buf);
+  let o = 0;
+  dv.setUint32(o, XS, true); o += 4;
+  dv.setUint32(o, YS, true); o += 4;
+  dv.setFloat32(o, 0.25, true); o += 4;
+  dv.setFloat32(o, k, true); o += 4;
+  dv.setFloat32(o, dampV, true); o += 4;
+  dv.setFloat32(o, dampD, true); o += 4;
+  dv.setFloat32(o, anti, true); o += 4;
+  dv.setUint32(o, paused ? 1 : 0, true); o += 4;
+
+  dv.setFloat32(o, ax, true); o += 4;
+  dv.setFloat32(o, ay, true); o += 4;
+  dv.setFloat32(o, bx, true); o += 4;
+  dv.setFloat32(o, by, true); o += 4;
+  dv.setFloat32(o, brush, true); o += 4;
+  dv.setFloat32(o, impulse, true); o += 4;
+  dv.setFloat32(o, sharpness, true); o += 4;
+  dv.setUint32(o, paintOn, true); o += 4;
+  dv.setUint32(o, mode, true); o += 4;
+  const mHold = (downM && mHoldStart >= 0) ? ((performance.now() - mHoldStart) / 1000) : 0;
+  dv.setFloat32(o, mHold, true); o += 4;
+
+  device.queue.writeBuffer(paramsBuf, 0, buf);
+
+  const rbuf = new ArrayBuffer(4 * 8);
+  const rdv = new DataView(rbuf);
+  let ro = 0;
+  rdv.setUint32(ro, XS, true); ro += 4;
+  rdv.setUint32(ro, YS, true); ro += 4;
+  rdv.setUint32(ro, PS, true); ro += 4;
+  rdv.setUint32(ro, 0, true);  ro += 4;
+  rdv.setFloat32(ro, 0.10, true); ro += 4;
+  rdv.setFloat32(ro, canvas.width / canvas.height, true); ro += 4;
+  rdv.setFloat32(ro, 0, true); ro += 4;
+  rdv.setFloat32(ro, 0, true); ro += 4;
+  device.queue.writeBuffer(rParamsBuf, 0, rbuf);
+}
+
+// ---- loop ----
+let frame = 0;
+let t0 = performance.now();
+
+function loop() {
+  configureIfNeeded();
+  writeParams();
+
+  const encoder = device.createCommandEncoder();
+
+  const cp = encoder.beginComputePass();
+  cp.setPipeline(computePipeline);
+  cp.setBindGroup(0, computeBindGroup);
+  cp.dispatchWorkgroups(Math.ceil(XS / 16), Math.ceil(YS / 16));
+  cp.end();
+
+  const view = ctx.getCurrentTexture().createView();
+  const rp = encoder.beginRenderPass({
+    colorAttachments: [{
+      view,
+      clearValue: { r: 0, g: 0, b: 0, a: 1 },
+      loadOp: "clear",
+      storeOp: "store",
+    }],
+  });
+  rp.setPipeline(renderPipeline);
+  rp.setBindGroup(0, renderBindGroup);
+  rp.draw(6);
+  rp.end();
+
+  device.queue.submit([encoder.finish()]);
+
+  frame++;
+  const now = performance.now();
+  if (now - t0 > 500) {
+    const fps = (frame * 1000) / (now - t0);
+    const { cx, cy } = mouseToCell();
+    const mode = downR ? "damp" : (downM ? "anti" : "norm");
+    stat.textContent =
+      `grid=${XS} ps=${PS} brush=${brush} sharp=${sharpEl.value} paused=${paused?1:0} mode=${mode} ctrl=${ctrlHeld?1:0} mouse=(${cx},${cy}) fps=${fps.toFixed(1)}`;
+    frame = 0; t0 = now;
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
